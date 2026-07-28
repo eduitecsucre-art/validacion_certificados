@@ -1,0 +1,88 @@
+generator client {
+  provider = "prisma-client"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  INSTRUCTOR
+  STUDENT
+}
+
+enum CertificateStatus {
+  VALID
+  EXPIRED
+  REVOKED
+}
+
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      UserRole @default(STUDENT)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  certificates Certificate[] @relation("StudentCertificates")
+  issued        Certificate[] @relation("IssuedBy")
+}
+
+model Course {
+  id           String   @id @default(uuid())
+  name         String
+  description  String?
+  hours        Int
+  validityDays Int      @default(365)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  certificates Certificate[]
+  templates    Template[]
+}
+
+model Template {
+  id        String   @id @default(uuid())
+  courseId  String
+  imageUrl  String
+  fields    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  course Course @relation(fields: [courseId], references: [id])
+}
+
+model Certificate {
+  id          String             @id @default(uuid())
+  code        String             @unique
+  studentId   String
+  courseId    String
+  issuedById  String
+  instructor  String
+  startDate   DateTime
+  endDate     DateTime?
+  hours       Int
+  expiresAt   DateTime
+  status      CertificateStatus  @default(VALID)
+  pdfUrl      String?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  student  User   @relation("StudentCertificates", fields: [studentId], references: [id])
+  issuedBy User   @relation("IssuedBy", fields: [issuedById], references: [id])
+  course   Course @relation(fields: [courseId], references: [id])
+}
+
+model Notification {
+  id            String   @id @default(uuid())
+  certificateId String
+  type          String
+  sentAt        DateTime?
+  createdAt     DateTime @default(now())
+}
