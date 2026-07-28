@@ -6,9 +6,10 @@ import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { CoursesModule } from './courses/courses.module';
 import { TemplatesModule } from './templates/templates.module';
+import { CertificatesModule } from './certificates/certificates.module';
 
 @Module({
-  imports: [AuthModule, UsersModule, CoursesModule, TemplatesModule],
+  imports: [AuthModule, UsersModule, CoursesModule, TemplatesModule, CertificatesModule],
   controllers: [AppController],
   providers: [AppService, DrizzleService],
 })
