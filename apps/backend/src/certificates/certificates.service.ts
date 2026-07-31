@@ -1,13 +1,18 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { DrizzleService } from '../drizzle.service';
 import { certificates, users, courses } from '../db/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import * as QRCode from 'qrcode';
+import { Resend } from 'resend';
 
 @Injectable()
 export class CertificatesService {
-  constructor(private drizzle: DrizzleService) {}
+  private resend: Resend;
+
+  constructor(private drizzle: DrizzleService) {
+    this.resend = new Resend(process.env.RESEND_API_KEY);
+  }
 
   private generateCode(): string {
     const year = new Date().getFullYear();
@@ -105,6 +110,44 @@ export class CertificatesService {
       expiresAt: expiresAt.toISOString(),
       status: 'VALID',
     });
+
+    // Obtener datos del estudiante y curso para el email
+    const studentResult = await this.drizzle.db
+      .select()
+      .from(users)
+      .where(eq(users.id, data.studentId))
+      .limit(1);
+
+    const courseResult = await this.drizzle.db
+      .select()
+      .from(courses)
+      .where(eq(courses.id, data.courseId))
+      .limit(1);
+
+    const student = studentResult[0];
+    const course = courseResult[0];
+
+    // Enviar email de confirmación
+    if (student?.email && process.env.RESEND_API_KEY !== 're_placeholder') {
+      try {
+        await this.resend.emails.send({
+          from: process.env.EMAIL_FROM ?? 'certificados@tuinstitucion.com',
+          to: student.email,
+          subject: `Tu certificado de ${course?.name} ha sido emitido`,
+          html: `
+            <h2>¡Felicitaciones ${student.name}!</h2>
+            <p>Tu certificado del curso <strong>${course?.name}</strong> ha sido emitido exitosamente.</p>
+            <p><strong>Código:</strong> ${code}</p>
+            <p><strong>Instructor:</strong> ${data.instructor}</p>
+            <p><strong>Horas académicas:</strong> ${data.hours}h</p>
+            <p><strong>Válido hasta:</strong> ${expiresAt.toLocaleDateString('es-ES')}</p>
+            <p>Puedes verificar tu certificado en: <a href="${qrUrl}">${qrUrl}</a></p>
+          `,
+        });
+      } catch (e) {
+        console.error('Error enviando email de confirmación:', e);
+      }
+    }
 
     return { ...await this.findOne(id), qrCode };
   }

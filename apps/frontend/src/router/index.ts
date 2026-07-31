@@ -69,6 +69,12 @@ const router = createRouter({
           component: () => import('../views/staff/ImportView.vue'),
           meta: { roles: ['SUPER_ADMIN', 'STAFF'] },
         },
+        {
+          path: 'notificaciones',
+          name: 'notificaciones',
+          component: () => import('../views/admin/NotificationsView.vue'),
+          meta: { roles: ['SUPER_ADMIN', 'STAFF'] },
+        },
       ],
     },
     {

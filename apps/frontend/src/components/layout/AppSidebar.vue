@@ -29,6 +29,10 @@
           active-class="bg-gray-700">
           📥 Importar CSV
         </RouterLink>
+        <RouterLink to="/notificaciones" class="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-700 text-sm"
+          active-class="bg-gray-700">
+          🔔 Notificaciones
+        </RouterLink>
       </template>
 
       <template v-if="auth.role === 'SUPER_ADMIN' || auth.role === 'STAFF'">
