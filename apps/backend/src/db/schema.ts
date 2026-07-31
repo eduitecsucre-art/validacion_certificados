@@ -16,11 +16,19 @@ export const courses = sqliteTable('courses', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
   description: text('description'),
+  instructor: text('instructor').notNull().default(''),
   hours: integer('hours').notNull(),
   validityDays: integer('validity_days').notNull().default(365),
   active: integer('active', { mode: 'boolean' }).notNull().default(true),
   createdAt: text('created_at').default(sql`(datetime('now'))`),
   updatedAt: text('updated_at').default(sql`(datetime('now'))`),
+});
+
+export const enrollments = sqliteTable('enrollments', {
+  id: text('id').primaryKey(),
+  studentId: text('student_id').notNull().references(() => users.id),
+  courseId: text('course_id').notNull().references(() => courses.id),
+  enrolledAt: text('enrolled_at').default(sql`(datetime('now'))`),
 });
 
 export const templates = sqliteTable('templates', {
