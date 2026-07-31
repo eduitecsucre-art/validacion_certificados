@@ -57,6 +57,18 @@ const router = createRouter({
           name: 'perfil',
           component: () => import('../views/student/ProfileView.vue'),
         },
+        {
+          path: 'informes',
+          name: 'informes',
+          component: () => import('../views/admin/ReportsView.vue'),
+          meta: { roles: ['SUPER_ADMIN', 'STAFF'] },
+        },
+        {
+          path: 'importar',
+          name: 'importar',
+          component: () => import('../views/staff/ImportView.vue'),
+          meta: { roles: ['SUPER_ADMIN', 'STAFF'] },
+        },
       ],
     },
     {

@@ -7,65 +7,53 @@
     </div>
 
     <nav class="flex-1 p-4 space-y-1">
-      <RouterLink
-        to="/dashboard"
-        class="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-700 text-sm"
-        active-class="bg-gray-700"
-      >
+      <RouterLink to="/dashboard" class="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-700 text-sm"
+        active-class="bg-gray-700">
         📊 Dashboard
       </RouterLink>
 
       <template v-if="auth.role === 'SUPER_ADMIN'">
-        <RouterLink
-          to="/usuarios"
-          class="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-700 text-sm"
-          active-class="bg-gray-700"
-        >
+        <RouterLink to="/usuarios" class="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-700 text-sm"
+          active-class="bg-gray-700">
           👥 Usuarios
         </RouterLink>
-        <RouterLink
-          to="/cursos"
-          class="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-700 text-sm"
-          active-class="bg-gray-700"
-        >
+        <RouterLink to="/cursos" class="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-700 text-sm"
+          active-class="bg-gray-700">
           📚 Cursos
+        </RouterLink>
+        <RouterLink to="/informes" class="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-700 text-sm"
+          active-class="bg-gray-700">
+          📊 Informes
+        </RouterLink>
+        <RouterLink to="/importar" class="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-700 text-sm"
+          active-class="bg-gray-700">
+          📥 Importar CSV
         </RouterLink>
       </template>
 
       <template v-if="auth.role === 'SUPER_ADMIN' || auth.role === 'STAFF'">
-        <RouterLink
-          to="/certificados"
-          class="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-700 text-sm"
-          active-class="bg-gray-700"
-        >
+        <RouterLink to="/certificados" class="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-700 text-sm"
+          active-class="bg-gray-700">
           🎓 Certificados
         </RouterLink>
       </template>
 
       <template v-if="auth.role === 'STUDENT'">
-        <RouterLink
-          to="/mis-certificados"
-          class="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-700 text-sm"
-          active-class="bg-gray-700"
-        >
+        <RouterLink to="/mis-certificados"
+          class="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-700 text-sm" active-class="bg-gray-700">
           🎓 Mis Certificados
         </RouterLink>
       </template>
 
-      <RouterLink
-        to="/perfil"
-        class="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-700 text-sm"
-        active-class="bg-gray-700"
-      >
+      <RouterLink to="/perfil" class="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-700 text-sm"
+        active-class="bg-gray-700">
         👤 Mi Perfil
       </RouterLink>
     </nav>
 
     <div class="p-4 border-t border-gray-700">
-      <button
-        @click="handleLogout"
-        class="w-full text-left px-3 py-2 text-sm text-red-400 hover:bg-gray-700 rounded-md"
-      >
+      <button @click="handleLogout"
+        class="w-full text-left px-3 py-2 text-sm text-red-400 hover:bg-gray-700 rounded-md">
         🚪 Cerrar sesión
       </button>
     </div>
