@@ -12,6 +12,10 @@ export class AuthService {
     private jwtService: JwtService,
   ) {}
 
+  private fullName(user: any): string {
+    return `${user.apellidoPaterno} ${user.apellidoMaterno ?? ''} ${user.nombres}`.trim();
+  }
+
   async login(email: string, password: string) {
     const result = await this.drizzle.db
       .select()
@@ -30,7 +34,15 @@ export class AuthService {
     const payload = { sub: user.id, email: user.email, role: user.role };
     return {
       access_token: this.jwtService.sign(payload),
-      user: { id: user.id, name: user.name, email: user.email, role: user.role },
+      user: {
+        id: user.id,
+        nombres: user.nombres,
+        apellidoPaterno: user.apellidoPaterno,
+        apellidoMaterno: user.apellidoMaterno,
+        fullName: this.fullName(user),
+        email: user.email,
+        role: user.role,
+      },
     };
   }
 
@@ -42,6 +54,14 @@ export class AuthService {
       .limit(1);
     const user = result[0];
     if (!user) throw new UnauthorizedException();
-    return { id: user.id, name: user.name, email: user.email, role: user.role };
+    return {
+      id: user.id,
+      nombres: user.nombres,
+      apellidoPaterno: user.apellidoPaterno,
+      apellidoMaterno: user.apellidoMaterno,
+      fullName: this.fullName(user),
+      email: user.email,
+      role: user.role,
+    };
   }
 }

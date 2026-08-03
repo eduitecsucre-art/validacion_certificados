@@ -9,6 +9,7 @@ import { CoursesModule } from './courses/courses.module';
 import { TemplatesModule } from './templates/templates.module';
 import { CertificatesModule } from './certificates/certificates.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { EnrollmentsModule } from './enrollments/enrollments.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { NotificationsModule } from './notifications/notifications.module';
     TemplatesModule,
     CertificatesModule,
     NotificationsModule,
+    EnrollmentsModule,
   ],
   controllers: [AppController],
   providers: [AppService, DrizzleService],

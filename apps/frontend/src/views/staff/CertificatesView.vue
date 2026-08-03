@@ -3,10 +3,10 @@
     <div class="flex justify-between items-center mb-6">
       <h1 class="text-2xl font-bold text-gray-800">Certificados</h1>
       <div class="flex gap-2">
-        <button @click="showMassModal = true" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 text-sm">
+        <button @click="openMassModal" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 text-sm">
           + Emisión Masiva
         </button>
-        <button @click="showModal = true" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 text-sm">
+        <button @click="openIndividualModal" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 text-sm">
           + Emitir Individual
         </button>
       </div>
@@ -73,21 +73,27 @@
         <h2 class="text-lg font-bold mb-4">Emitir Certificado Individual</h2>
         <form @submit.prevent="handleCreate" class="space-y-3">
           <div>
-            <label class="text-xs text-gray-500">Estudiante</label>
-            <select v-model="form.studentId" required class="w-full border rounded px-3 py-2 text-sm">
-              <option value="">Seleccionar estudiante</option>
-              <option v-for="u in students" :key="u.id" :value="u.id">{{ u.name }}</option>
-            </select>
-          </div>
-          <div>
             <label class="text-xs text-gray-500">Curso</label>
-            <select v-model="form.courseId" required class="w-full border rounded px-3 py-2 text-sm">
+            <select v-model="form.courseId" required @change="loadEnrolledStudents('individual')"
+              class="w-full border rounded px-3 py-2 text-sm">
               <option value="">Seleccionar curso</option>
-              <option v-for="c in courses" :key="c.id" :value="c.id">{{ c.name }}</option>
+              <option v-for="c in activeCourses" :key="c.id" :value="c.id">{{ c.name }}</option>
             </select>
           </div>
           <div>
-            <label class="text-xs text-gray-500">Instructor / Expositor</label>
+            <label class="text-xs text-gray-500">Estudiante inscrito</label>
+            <select v-model="form.studentId" required :disabled="!form.courseId"
+              class="w-full border rounded px-3 py-2 text-sm disabled:bg-gray-50">
+              <option value="">{{ form.courseId ? 'Seleccionar estudiante' : 'Primero selecciona un curso' }}</option>
+              <option v-for="u in enrolledStudentsIndividual" :key="u.studentId" :value="u.studentId">
+                {{ u.studentName }}
+              </option>
+            </select>
+            <p v-if="form.courseId && enrolledStudentsIndividual.length === 0"
+              class="text-xs text-yellow-600 mt-1">No hay estudiantes inscritos en este curso</p>
+          </div>
+          <div>
+            <label class="text-xs text-gray-500">Instructor</label>
             <input v-model="form.instructor" required class="w-full border rounded px-3 py-2 text-sm" />
           </div>
           <div class="flex gap-2">
@@ -125,13 +131,14 @@
         <form @submit.prevent="handleMassCreate" class="space-y-3">
           <div>
             <label class="text-xs text-gray-500">Curso</label>
-            <select v-model="massForm.courseId" required class="w-full border rounded px-3 py-2 text-sm">
+            <select v-model="massForm.courseId" required @change="loadEnrolledStudents('mass')"
+              class="w-full border rounded px-3 py-2 text-sm">
               <option value="">Seleccionar curso</option>
-              <option v-for="c in courses" :key="c.id" :value="c.id">{{ c.name }}</option>
+              <option v-for="c in activeCourses" :key="c.id" :value="c.id">{{ c.name }}</option>
             </select>
           </div>
           <div>
-            <label class="text-xs text-gray-500">Instructor / Expositor</label>
+            <label class="text-xs text-gray-500">Instructor</label>
             <input v-model="massForm.instructor" required class="w-full border rounded px-3 py-2 text-sm" />
           </div>
           <div class="flex gap-2">
@@ -149,22 +156,31 @@
             <input v-model.number="massForm.hours" type="number" min="1" required
               class="w-full border rounded px-3 py-2 text-sm" />
           </div>
-          <div>
-            <label class="text-xs text-gray-500">Estudiantes</label>
+          <div v-if="massForm.courseId">
+            <label class="text-xs text-gray-500">Estudiantes inscritos</label>
             <div class="border rounded p-2 max-h-40 overflow-y-auto space-y-1">
-              <label v-for="u in students" :key="u.id" class="flex items-center gap-2 text-sm cursor-pointer">
-                <input type="checkbox" :value="u.id" v-model="massForm.studentIds" />
-                {{ u.name }}
+              <label v-for="u in enrolledStudentsMass" :key="u.studentId"
+                class="flex items-center gap-2 text-sm cursor-pointer">
+                <input type="checkbox" :value="u.studentId" v-model="massForm.studentIds" />
+                {{ u.studentName }}
               </label>
+              <p v-if="enrolledStudentsMass.length === 0" class="text-xs text-yellow-600 text-center py-2">
+                No hay estudiantes inscritos en este curso
+              </p>
             </div>
-            <p class="text-xs text-gray-400 mt-1">{{ massForm.studentIds.length }} estudiante(s) seleccionados</p>
+            <div class="flex justify-between text-xs text-gray-400 mt-1">
+              <span>{{ massForm.studentIds.length }} seleccionados</span>
+              <button type="button" @click="selectAll" class="text-blue-500 hover:underline">
+                {{ massForm.studentIds.length === enrolledStudentsMass.length ? 'Deseleccionar todos' : 'Seleccionar todos' }}
+              </button>
+            </div>
           </div>
           <p v-if="massError" class="text-red-500 text-xs">{{ massError }}</p>
           <p v-if="massSuccess" class="text-green-600 text-xs">{{ massSuccess }}</p>
           <div class="flex gap-2 pt-2">
-            <button type="submit" :disabled="massLoading"
+            <button type="submit" :disabled="massLoading || massForm.studentIds.length === 0"
               class="flex-1 bg-green-600 text-white py-2 rounded text-sm hover:bg-green-700 disabled:opacity-50">
-              {{ massLoading ? 'Emitiendo...' : 'Emitir para todos' }}
+              {{ massLoading ? 'Emitiendo...' : `Emitir para ${massForm.studentIds.length} estudiante(s)` }}
             </button>
             <button type="button" @click="showMassModal = false"
               class="flex-1 border py-2 rounded text-sm hover:bg-gray-50">
@@ -239,10 +255,13 @@ import QRCode from 'qrcode'
 import { getCertificates, createCertificate } from '../../api/certificates'
 import { getUsers } from '../../api/users'
 import { getCourses } from '../../api/courses'
+import { getEnrollmentsByCourse } from '../../api/enrollments'
 
 const certificates = ref<any[]>([])
-const students = ref<any[]>([])
+const allUsers = ref<any[]>([])
 const courses = ref<any[]>([])
+const enrolledStudentsIndividual = ref<any[]>([])
+const enrolledStudentsMass = ref<any[]>([])
 const showModal = ref(false)
 const showMassModal = ref(false)
 const selectedCert = ref<any>(null)
@@ -257,6 +276,8 @@ const filterStatus = ref('')
 const form = ref({ studentId: '', courseId: '', instructor: '', startDate: '', endDate: '', hours: 0 })
 const massForm = ref({ courseId: '', instructor: '', startDate: '', endDate: '', hours: 0, studentIds: [] as string[] })
 
+const activeCourses = computed(() => courses.value.filter(c => c.active))
+
 const filtered = computed(() => {
   return certificates.value.filter(c => {
     const q = search.value.toLowerCase()
@@ -267,7 +288,7 @@ const filtered = computed(() => {
 })
 
 function getStudentName(id: string) {
-  return students.value.find(u => u.id === id)?.name ?? id
+  return allUsers.value.find(u => u.id === id)?.name ?? id
 }
 
 function getCourseName(id: string) {
@@ -278,10 +299,50 @@ function formatDate(date: string) {
   return new Date(date).toLocaleDateString('es-ES')
 }
 
+async function loadEnrolledStudents(mode: 'individual' | 'mass') {
+  const courseId = mode === 'individual' ? form.value.courseId : massForm.value.courseId
+  if (!courseId) return
+  const res = await getEnrollmentsByCourse(courseId)
+  if (mode === 'individual') {
+    enrolledStudentsIndividual.value = res.data
+    form.value.studentId = ''
+    const course = courses.value.find(c => c.id === courseId)
+    if (course) form.value.instructor = course.instructor
+  } else {
+    enrolledStudentsMass.value = res.data
+    massForm.value.studentIds = []
+    const course = courses.value.find(c => c.id === courseId)
+    if (course) massForm.value.instructor = course.instructor
+  }
+}
+
+function selectAll() {
+  if (massForm.value.studentIds.length === enrolledStudentsMass.value.length) {
+    massForm.value.studentIds = []
+  } else {
+    massForm.value.studentIds = enrolledStudentsMass.value.map(u => u.studentId)
+  }
+}
+
 async function openDetail(cert: any) {
   selectedCert.value = cert
   const url = `${window.location.origin}/verificar/${cert.code}`
   qrDataUrl.value = await QRCode.toDataURL(url)
+}
+
+function openIndividualModal() {
+  form.value = { studentId: '', courseId: '', instructor: '', startDate: '', endDate: '', hours: 0 }
+  enrolledStudentsIndividual.value = []
+  formError.value = ''
+  showModal.value = true
+}
+
+function openMassModal() {
+  massForm.value = { courseId: '', instructor: '', startDate: '', endDate: '', hours: 0, studentIds: [] }
+  enrolledStudentsMass.value = []
+  massError.value = ''
+  massSuccess.value = ''
+  showMassModal.value = true
 }
 
 async function load() {
@@ -291,8 +352,8 @@ async function load() {
     getCourses(),
   ])
   certificates.value = certsRes.data
-  students.value = usersRes.data.filter((u: any) => u.role === 'STUDENT' && u.active)
-  courses.value = coursesRes.data.filter((c: any) => c.active)
+  allUsers.value = usersRes.data
+  courses.value = coursesRes.data
 }
 
 async function handleCreate() {
@@ -327,7 +388,7 @@ async function handleMassCreate() {
       })
     }
     massSuccess.value = `✅ ${massForm.value.studentIds.length} certificados emitidos correctamente`
-    massForm.value = { courseId: '', instructor: '', startDate: '', endDate: '', hours: 0, studentIds: [] }
+    massForm.value.studentIds = []
     await load()
   } catch (e: any) {
     massError.value = e.response?.data?.message ?? 'Error al emitir certificados'

@@ -7,7 +7,7 @@ import { Roles } from '../auth/roles.decorator';
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('courses')
 export class CoursesController {
-  constructor(private coursesService: CoursesService) {}
+  constructor(private coursesService: CoursesService) { }
 
   @Roles('SUPER_ADMIN', 'STAFF')
   @Get()
@@ -23,7 +23,7 @@ export class CoursesController {
 
   @Roles('SUPER_ADMIN')
   @Post()
-  create(@Body() body: { name: string; description?: string; hours: number; validityDays?: number }) {
+  create(@Body() body: { name: string; description?: string; instructor: string; hours: number; validityDays?: number }) {
     return this.coursesService.create(body);
   }
 

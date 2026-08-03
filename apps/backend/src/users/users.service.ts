@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { DrizzleService } from '../drizzle.service';
 import { users } from '../db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, asc } from 'drizzle-orm';
 import * as bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -9,15 +9,16 @@ import { v4 as uuidv4 } from 'uuid';
 export class UsersService {
   constructor(private drizzle: DrizzleService) {}
 
+  private fullName(user: any): string {
+    return `${user.apellidoPaterno} ${user.apellidoMaterno ?? ''} ${user.nombres}`.trim();
+  }
+
   async findAll() {
-    return this.drizzle.db.select({
-      id: users.id,
-      name: users.name,
-      email: users.email,
-      role: users.role,
-      active: users.active,
-      createdAt: users.createdAt,
-    }).from(users);
+    const result = await this.drizzle.db
+      .select()
+      .from(users)
+      .orderBy(asc(users.apellidoPaterno), asc(users.apellidoMaterno), asc(users.nombres));
+    return result.map(u => ({ ...u, fullName: this.fullName(u) }));
   }
 
   async findOne(id: string) {
@@ -27,10 +28,19 @@ export class UsersService {
       .where(eq(users.id, id))
       .limit(1);
     if (!result[0]) throw new NotFoundException('Usuario no encontrado');
-    return result[0];
+    return { ...result[0], fullName: this.fullName(result[0]) };
   }
 
-  async create(data: { name: string; email: string; password: string; role: string }) {
+  async create(data: {
+    nombres: string;
+    apellidoPaterno: string;
+    apellidoMaterno?: string;
+    ci?: string;
+    email: string;
+    password: string;
+    celular?: string;
+    role: string;
+  }) {
     const existing = await this.drizzle.db
       .select()
       .from(users)
@@ -43,16 +53,29 @@ export class UsersService {
 
     await this.drizzle.db.insert(users).values({
       id,
-      name: data.name,
+      nombres: data.nombres,
+      apellidoPaterno: data.apellidoPaterno,
+      apellidoMaterno: data.apellidoMaterno,
+      ci: data.ci,
       email: data.email,
       password: hashed,
+      celular: data.celular,
       role: data.role,
     });
 
-    return { id, name: data.name, email: data.email, role: data.role };
+    return this.findOne(id);
   }
 
-  async update(id: string, data: Partial<{ name: string; email: string; password: string; active: boolean }>) {
+  async update(id: string, data: Partial<{
+    nombres: string;
+    apellidoPaterno: string;
+    apellidoMaterno: string;
+    ci: string;
+    email: string;
+    password: string;
+    celular: string;
+    active: boolean;
+  }>) {
     await this.findOne(id);
     if (data.password) {
       data.password = await bcrypt.hash(data.password, 10);

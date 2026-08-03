@@ -22,19 +22,20 @@ export class CoursesService {
     return result[0];
   }
 
-  async create(data: { name: string; description?: string; hours: number; validityDays?: number }) {
+  async create(data: { name: string; description?: string; instructor: string; hours: number; validityDays?: number }) {
     const id = uuidv4();
     await this.drizzle.db.insert(courses).values({
       id,
       name: data.name,
       description: data.description,
+      instructor: data.instructor,
       hours: data.hours,
       validityDays: data.validityDays ?? 365,
     });
     return this.findOne(id);
   }
 
-  async update(id: string, data: Partial<{ name: string; description: string; hours: number; validityDays: number; active: boolean }>) {
+  async update(id: string, data: Partial<{ name: string; description: string; instructor: string; hours: number; validityDays: number; active: boolean }>) {
     await this.findOne(id);
     await this.drizzle.db.update(courses).set(data).where(eq(courses.id, id));
     return this.findOne(id);

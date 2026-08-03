@@ -3,9 +3,13 @@ import { text, integer, sqliteTable } from 'drizzle-orm/sqlite-core';
 
 export const users = sqliteTable('users', {
   id: text('id').primaryKey(),
-  name: text('name').notNull(),
+  nombres: text('nombres').notNull(),
+  apellidoPaterno: text('apellido_paterno').notNull(),
+  apellidoMaterno: text('apellido_materno'),
+  ci: text('ci'),
   email: text('email').notNull().unique(),
   password: text('password').notNull(),
+  celular: text('celular'),
   role: text('role').notNull().default('STUDENT'),
   active: integer('active', { mode: 'boolean' }).notNull().default(true),
   createdAt: text('created_at').default(sql`(datetime('now'))`),
@@ -28,6 +32,7 @@ export const enrollments = sqliteTable('enrollments', {
   id: text('id').primaryKey(),
   studentId: text('student_id').notNull().references(() => users.id),
   courseId: text('course_id').notNull().references(() => courses.id),
+  certificateIssued: integer('certificate_issued', { mode: 'boolean' }).notNull().default(false),
   enrolledAt: text('enrolled_at').default(sql`(datetime('now'))`),
 });
 

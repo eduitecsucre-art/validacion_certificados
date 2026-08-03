@@ -17,9 +17,13 @@ async function seed() {
 
   await db.insert(users).values({
     id: uuidv4(),
-    name: 'Super Administrador',
+    nombres: 'Super',
+    apellidoPaterno: 'Administrador',
+    apellidoMaterno: '',
+    ci: '00000000',
     email: 'admin@sistema.com',
     password,
+    celular: '',
     role: 'SUPER_ADMIN',
     active: true,
   });

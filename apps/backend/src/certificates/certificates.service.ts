@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { DrizzleService } from '../drizzle.service';
-import { certificates, users, courses } from '../db/schema';
-import { eq } from 'drizzle-orm';
+import { certificates, users, courses, enrollments } from '../db/schema';
+import { eq, and } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import * as QRCode from 'qrcode';
 import { Resend } from 'resend';
@@ -18,6 +18,10 @@ export class CertificatesService {
     const year = new Date().getFullYear();
     const random = Math.floor(Math.random() * 90000) + 10000;
     return `CERT-${year}-${random}`;
+  }
+
+  private fullName(user: any): string {
+    return `${user.apellidoPaterno} ${user.apellidoMaterno ?? ''} ${user.nombres}`.trim();
   }
 
   async findAll() {
@@ -52,7 +56,10 @@ export class CertificatesService {
         hours: certificates.hours,
         expiresAt: certificates.expiresAt,
         status: certificates.status,
-        studentName: users.name,
+        nombres: users.nombres,
+        apellidoPaterno: users.apellidoPaterno,
+        apellidoMaterno: users.apellidoMaterno,
+        ci: users.ci,
         courseName: courses.name,
       })
       .from(certificates)
@@ -74,7 +81,10 @@ export class CertificatesService {
       cert.status = 'EXPIRED';
     }
 
-    return cert;
+    return {
+      ...cert,
+      studentName: this.fullName(cert),
+    };
   }
 
   async create(data: {
@@ -111,7 +121,15 @@ export class CertificatesService {
       status: 'VALID',
     });
 
-    // Obtener datos del estudiante y curso para el email
+    // Marcar certificado como emitido en enrollment
+    await this.drizzle.db
+      .update(enrollments)
+      .set({ certificateIssued: true })
+      .where(and(
+        eq(enrollments.studentId, data.studentId),
+        eq(enrollments.courseId, data.courseId)
+      ));
+
     const studentResult = await this.drizzle.db
       .select()
       .from(users)
@@ -127,7 +145,6 @@ export class CertificatesService {
     const student = studentResult[0];
     const course = courseResult[0];
 
-    // Enviar email de confirmación
     if (student?.email && process.env.RESEND_API_KEY !== 're_placeholder') {
       try {
         await this.resend.emails.send({
@@ -135,7 +152,7 @@ export class CertificatesService {
           to: student.email,
           subject: `Tu certificado de ${course?.name} ha sido emitido`,
           html: `
-            <h2>¡Felicitaciones ${student.name}!</h2>
+            <h2>¡Felicitaciones ${this.fullName(student)}!</h2>
             <p>Tu certificado del curso <strong>${course?.name}</strong> ha sido emitido exitosamente.</p>
             <p><strong>Código:</strong> ${code}</p>
             <p><strong>Instructor:</strong> ${data.instructor}</p>

@@ -15,6 +15,10 @@ export class NotificationsService {
     this.resend = new Resend(process.env.RESEND_API_KEY);
   }
 
+  private fullName(user: any): string {
+    return `${user.apellidoPaterno} ${user.apellidoMaterno ?? ''} ${user.nombres}`.trim();
+  }
+
   @Cron(CronExpression.EVERY_DAY_AT_8AM)
   async checkExpiringCertificates() {
     this.logger.log('Revisando certificados por vencer...');
@@ -29,7 +33,9 @@ export class NotificationsService {
         code: certificates.code,
         expiresAt: certificates.expiresAt,
         studentId: certificates.studentId,
-        studentName: users.name,
+        nombres: users.nombres,
+        apellidoPaterno: users.apellidoPaterno,
+        apellidoMaterno: users.apellidoMaterno,
         studentEmail: users.email,
         courseName: courses.name,
       })
@@ -45,7 +51,10 @@ export class NotificationsService {
       );
 
     for (const cert of expiring) {
-      await this.sendExpirationEmail(cert);
+      await this.sendExpirationEmail({
+        ...cert,
+        studentName: this.fullName(cert),
+      });
     }
 
     this.logger.log(`${expiring.length} certificados por vencer notificados`);
@@ -75,7 +84,6 @@ export class NotificationsService {
           <p>Tu certificado del curso <strong>${cert.courseName}</strong> vence el <strong>${new Date(cert.expiresAt).toLocaleDateString('es-ES')}</strong>.</p>
           <p>Código del certificado: <strong>${cert.code}</strong></p>
           <p>Te recomendamos renovar tu certificado para mantener tus credenciales actualizadas.</p>
-          <p>Contáctanos para más información.</p>
         `,
       });
 
@@ -88,7 +96,8 @@ export class NotificationsService {
 
       this.logger.log(`Email enviado a ${cert.studentEmail}`);
     } catch (error) {
-        this.logger.error(`Error enviando email: ${(error as Error).message}`);    }
+      this.logger.error(`Error enviando email: ${(error as Error).message}`);
+    }
   }
 
   async getExpiringCertificates(days: number = 30) {
@@ -102,7 +111,9 @@ export class NotificationsService {
         code: certificates.code,
         expiresAt: certificates.expiresAt,
         status: certificates.status,
-        studentName: users.name,
+        nombres: users.nombres,
+        apellidoPaterno: users.apellidoPaterno,
+        apellidoMaterno: users.apellidoMaterno,
         studentEmail: users.email,
         courseName: courses.name,
       })
