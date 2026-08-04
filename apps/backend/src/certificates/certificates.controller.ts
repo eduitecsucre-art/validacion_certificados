@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Delete, Body, Param, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards, Request } from '@nestjs/common';
 import { CertificatesService } from './certificates.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
@@ -45,5 +45,19 @@ export class CertificatesController {
   @Delete(':id')
   revoke(@Param('id') id: string) {
     return this.certificatesService.revoke(id);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('SUPER_ADMIN')
+  @Patch(':id/reactivate')
+  reactivate(@Param('id') id: string) {
+    return this.certificatesService.reactivate(id);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('SUPER_ADMIN')
+  @Delete(':id/permanent')
+  remove(@Param('id') id: string) {
+    return this.certificatesService.remove(id);
   }
 }

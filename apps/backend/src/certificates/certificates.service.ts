@@ -177,4 +177,30 @@ export class CertificatesService {
       .where(eq(certificates.id, id));
     return { message: 'Certificado revocado' };
   }
+
+  async reactivate(id: string) {
+    await this.findOne(id);
+    await this.drizzle.db
+      .update(certificates)
+      .set({ status: 'VALID' })
+      .where(eq(certificates.id, id));
+    return { message: 'Certificado reactivado' };
+  }
+
+  async remove(id: string) {
+    const cert = await this.findOne(id);
+
+    // Si la inscripción original todavía existe, la desmarcamos
+    // como "certificado emitido" (no falla si ya no existe)
+    await this.drizzle.db
+      .update(enrollments)
+      .set({ certificateIssued: false })
+      .where(and(
+        eq(enrollments.studentId, cert.studentId),
+        eq(enrollments.courseId, cert.courseId)
+      ));
+
+    await this.drizzle.db.delete(certificates).where(eq(certificates.id, id));
+    return { message: 'Certificado eliminado permanentemente' };
+  }
 }

@@ -57,7 +57,24 @@
               </span>
             </td>
             <td class="px-4 py-3">
-              <button @click="openDetail(cert)" class="text-blue-500 hover:underline text-xs">Ver</button>
+              <div class="flex gap-2 items-center flex-wrap">
+                <button @click="openDetail(cert)" class="text-blue-500 hover:underline text-xs">
+                  Ver
+                </button>
+
+                <button v-if="cert.status !== 'REVOKED'" @click="handleRevoke(cert)"
+                  class="text-yellow-600 hover:underline text-xs">
+                  Revocar
+                </button>
+                <button v-else @click="handleReactivate(cert)"
+                  class="text-green-600 hover:underline text-xs">
+                  Reactivar
+                </button>
+
+                <button @click="handleDelete(cert)" class="text-red-600 hover:underline text-xs">
+                  Eliminar
+                </button>
+              </div>
             </td>
           </tr>
           <tr v-if="filtered.length === 0">
@@ -252,7 +269,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import QRCode from 'qrcode'
-import { getCertificates, createCertificate } from '../../api/certificates'
+import { getCertificates, createCertificate, revokeCertificate, reactivateCertificate, deleteCertificatePermanent } from '../../api/certificates'
 import { getUsers } from '../../api/users'
 import { getCourses } from '../../api/courses'
 import { getEnrollmentsByCourse } from '../../api/enrollments'
@@ -394,6 +411,37 @@ async function handleMassCreate() {
     massError.value = e.response?.data?.message ?? 'Error al emitir certificados'
   } finally {
     massLoading.value = false
+  }
+}
+
+async function handleRevoke(cert: any) {
+  if (!confirm(`¿Revocar el certificado ${cert.code}? Dejará de ser válido.`)) return
+  try {
+    await revokeCertificate(cert.id)
+    await load()
+  } catch (e: any) {
+    alert(e.response?.data?.message ?? 'Error al revocar el certificado')
+  }
+}
+
+async function handleReactivate(cert: any) {
+  if (!confirm(`¿Reactivar el certificado ${cert.code}? Volverá a estar como VÁLIDO.`)) return
+  try {
+    await reactivateCertificate(cert.id)
+    await load()
+  } catch (e: any) {
+    alert(e.response?.data?.message ?? 'Error al reactivar el certificado')
+  }
+}
+
+async function handleDelete(cert: any) {
+  if (!confirm(`⚠️ Esto eliminará PERMANENTEMENTE el certificado ${cert.code}. No se puede deshacer. ¿Continuar?`)) return
+  if (!confirm('Confirma de nuevo: esta acción es irreversible.')) return
+  try {
+    await deleteCertificatePermanent(cert.id)
+    await load()
+  } catch (e: any) {
+    alert(e.response?.data?.message ?? 'Error al eliminar el certificado')
   }
 }
 
