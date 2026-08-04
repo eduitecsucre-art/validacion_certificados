@@ -23,7 +23,16 @@ export class UsersController {
 
   @Roles('SUPER_ADMIN')
   @Post()
-  create(@Body() body: { name: string; email: string; password: string; role: string }) {
+  create(@Body() body: {
+    nombres: string;
+    apellidoPaterno: string;
+    apellidoMaterno?: string;
+    ci?: string;
+    email: string;
+    password: string;
+    celular?: string;
+    role: string;
+  }) {
     return this.usersService.create(body);
   }
 
