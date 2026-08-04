@@ -7,21 +7,19 @@
       </button>
     </div>
 
-    <!-- Buscador -->
     <div class="bg-white rounded-lg shadow p-4 mb-4">
-      <input
-        v-model="search"
-        placeholder="Buscar por nombre, email o rol..."
-        class="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-      />
+      <input v-model="search" placeholder="Buscar por nombre, CI, email o rol..."
+        class="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
     </div>
 
     <div class="bg-white rounded-lg shadow overflow-hidden">
       <table class="w-full text-sm">
         <thead class="bg-gray-50">
           <tr class="text-left text-gray-500">
-            <th class="px-4 py-3">Nombre</th>
+            <th class="px-4 py-3">Nombre completo</th>
+            <th class="px-4 py-3">CI</th>
             <th class="px-4 py-3">Email</th>
+            <th class="px-4 py-3">Celular</th>
             <th class="px-4 py-3">Rol</th>
             <th class="px-4 py-3">Estado</th>
             <th class="px-4 py-3">Acciones</th>
@@ -29,8 +27,10 @@
         </thead>
         <tbody>
           <tr v-for="user in filtered" :key="user.id" class="border-t">
-            <td class="px-4 py-3">{{ user.name }}</td>
+            <td class="px-4 py-3">{{ user.fullName }}</td>
+            <td class="px-4 py-3">{{ user.ci ?? '-' }}</td>
             <td class="px-4 py-3">{{ user.email }}</td>
+            <td class="px-4 py-3">{{ user.celular ?? '-' }}</td>
             <td class="px-4 py-3">
               <span class="px-2 py-0.5 rounded text-xs font-medium"
                 :class="{
@@ -53,7 +53,7 @@
             </td>
           </tr>
           <tr v-if="filtered.length === 0">
-            <td colspan="5" class="px-4 py-6 text-center text-gray-400">No se encontraron usuarios</td>
+            <td colspan="7" class="px-4 py-6 text-center text-gray-400">No se encontraron usuarios</td>
           </tr>
         </tbody>
       </table>
@@ -61,12 +61,32 @@
 
     <!-- Modal crear/editar -->
     <div v-if="showModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div class="bg-white rounded-lg p-6 w-full max-w-md">
+      <div class="bg-white rounded-lg p-6 w-full max-w-md max-h-screen overflow-y-auto">
         <h2 class="text-lg font-bold mb-4">{{ editing ? 'Editar Usuario' : 'Nuevo Usuario' }}</h2>
         <form @submit.prevent="handleSave" class="space-y-3">
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="text-xs text-gray-500">Apellido paterno</label>
+              <input v-model="form.apellidoPaterno" required class="w-full border rounded px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label class="text-xs text-gray-500">Apellido materno</label>
+              <input v-model="form.apellidoMaterno" class="w-full border rounded px-3 py-2 text-sm" />
+            </div>
+          </div>
           <div>
-            <label class="text-xs text-gray-500">Nombre completo</label>
-            <input v-model="form.name" required class="w-full border rounded px-3 py-2 text-sm" />
+            <label class="text-xs text-gray-500">Nombres</label>
+            <input v-model="form.nombres" required class="w-full border rounded px-3 py-2 text-sm" />
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="text-xs text-gray-500">CI</label>
+              <input v-model="form.ci" class="w-full border rounded px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label class="text-xs text-gray-500">Celular</label>
+              <input v-model="form.celular" class="w-full border rounded px-3 py-2 text-sm" />
+            </div>
           </div>
           <div>
             <label class="text-xs text-gray-500">Email</label>
@@ -74,7 +94,8 @@
           </div>
           <div>
             <label class="text-xs text-gray-500">{{ editing ? 'Nueva contraseña (dejar en blanco para no cambiar)' : 'Contraseña' }}</label>
-            <input v-model="form.password" type="password" :required="!editing" class="w-full border rounded px-3 py-2 text-sm" />
+            <input v-model="form.password" type="password" :required="!editing"
+              class="w-full border rounded px-3 py-2 text-sm" />
           </div>
           <div>
             <label class="text-xs text-gray-500">Rol</label>
@@ -108,15 +129,19 @@ const showModal = ref(false)
 const editing = ref<any>(null)
 const formError = ref('')
 const search = ref('')
-const form = ref({ name: '', email: '', password: '', role: 'STUDENT' })
+const form = ref({
+  nombres: '', apellidoPaterno: '', apellidoMaterno: '',
+  ci: '', email: '', password: '', celular: '', role: 'STUDENT'
+})
 
 const filtered = computed(() => {
   const q = search.value.toLowerCase()
   if (!q) return users.value
   return users.value.filter(u =>
-    u.name.toLowerCase().includes(q) ||
+    u.fullName?.toLowerCase().includes(q) ||
     u.email.toLowerCase().includes(q) ||
-    u.role.toLowerCase().includes(q)
+    u.role.toLowerCase().includes(q) ||
+    u.ci?.toLowerCase().includes(q)
   )
 })
 
@@ -127,13 +152,22 @@ async function load() {
 
 function openCreate() {
   editing.value = null
-  form.value = { name: '', email: '', password: '', role: 'STUDENT' }
+  form.value = { nombres: '', apellidoPaterno: '', apellidoMaterno: '', ci: '', email: '', password: '', celular: '', role: 'STUDENT' }
   showModal.value = true
 }
 
 function openEdit(user: any) {
   editing.value = user
-  form.value = { name: user.name, email: user.email, password: '', role: user.role }
+  form.value = {
+    nombres: user.nombres,
+    apellidoPaterno: user.apellidoPaterno,
+    apellidoMaterno: user.apellidoMaterno ?? '',
+    ci: user.ci ?? '',
+    email: user.email,
+    password: '',
+    celular: user.celular ?? '',
+    role: user.role,
+  }
   showModal.value = true
 }
 
@@ -141,7 +175,15 @@ async function handleSave() {
   formError.value = ''
   try {
     if (editing.value) {
-      const data: any = { name: form.value.name, email: form.value.email, role: form.value.role }
+      const data: any = {
+        nombres: form.value.nombres,
+        apellidoPaterno: form.value.apellidoPaterno,
+        apellidoMaterno: form.value.apellidoMaterno,
+        ci: form.value.ci,
+        email: form.value.email,
+        celular: form.value.celular,
+        role: form.value.role,
+      }
       if (form.value.password) data.password = form.value.password
       await updateUser(editing.value.id, data)
     } else {

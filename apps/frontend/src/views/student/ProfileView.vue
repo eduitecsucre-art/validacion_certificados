@@ -4,10 +4,30 @@
 
     <div class="bg-white rounded-lg shadow p-6 mb-6">
       <h2 class="font-semibold text-gray-700 mb-4">Datos personales</h2>
-      <form @submit.prevent="handleUpdate" class="space-y-4">
+      <form @submit.prevent="handleUpdate" class="space-y-3">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs text-gray-500 mb-1">Apellido paterno</label>
+            <input v-model="form.apellidoPaterno" required class="w-full border rounded px-3 py-2 text-sm" />
+          </div>
+          <div>
+            <label class="block text-xs text-gray-500 mb-1">Apellido materno</label>
+            <input v-model="form.apellidoMaterno" class="w-full border rounded px-3 py-2 text-sm" />
+          </div>
+        </div>
         <div>
-          <label class="block text-xs text-gray-500 mb-1">Nombre completo</label>
-          <input v-model="form.name" required class="w-full border rounded px-3 py-2 text-sm" />
+          <label class="block text-xs text-gray-500 mb-1">Nombres</label>
+          <input v-model="form.nombres" required class="w-full border rounded px-3 py-2 text-sm" />
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs text-gray-500 mb-1">CI</label>
+            <input v-model="form.ci" class="w-full border rounded px-3 py-2 text-sm" />
+          </div>
+          <div>
+            <label class="block text-xs text-gray-500 mb-1">Celular</label>
+            <input v-model="form.celular" class="w-full border rounded px-3 py-2 text-sm" />
+          </div>
         </div>
         <div>
           <label class="block text-xs text-gray-500 mb-1">Email</label>
@@ -15,7 +35,8 @@
         </div>
         <div>
           <label class="block text-xs text-gray-500 mb-1">Rol</label>
-          <input :value="auth.user?.role" disabled class="w-full border rounded px-3 py-2 text-sm bg-gray-50 text-gray-400" />
+          <input :value="auth.user?.role" disabled
+            class="w-full border rounded px-3 py-2 text-sm bg-gray-50 text-gray-400" />
         </div>
         <p v-if="updateSuccess" class="text-green-600 text-sm">✅ Datos actualizados correctamente</p>
         <p v-if="updateError" class="text-red-500 text-sm">{{ updateError }}</p>
@@ -54,7 +75,7 @@ import { useAuthStore } from '../../stores/auth'
 import { updateUser } from '../../api/users'
 
 const auth = useAuthStore()
-const form = ref({ name: '', email: '' })
+const form = ref({ nombres: '', apellidoPaterno: '', apellidoMaterno: '', ci: '', celular: '', email: '' })
 const passwords = ref({ new: '', confirm: '' })
 const updateSuccess = ref(false)
 const updateError = ref('')
@@ -62,7 +83,11 @@ const passwordSuccess = ref(false)
 const passwordError = ref('')
 
 onMounted(() => {
-  form.value.name = auth.user?.name ?? ''
+  form.value.nombres = auth.user?.nombres ?? ''
+  form.value.apellidoPaterno = auth.user?.apellidoPaterno ?? ''
+  form.value.apellidoMaterno = auth.user?.apellidoMaterno ?? ''
+  form.value.ci = auth.user?.ci ?? ''
+  form.value.celular = auth.user?.celular ?? ''
   form.value.email = auth.user?.email ?? ''
 })
 
@@ -70,7 +95,7 @@ async function handleUpdate() {
   updateSuccess.value = false
   updateError.value = ''
   try {
-    await updateUser(auth.user.id, { name: form.value.name, email: form.value.email })
+    await updateUser(auth.user.id, form.value)
     await auth.fetchMe()
     updateSuccess.value = true
   } catch (e: any) {
