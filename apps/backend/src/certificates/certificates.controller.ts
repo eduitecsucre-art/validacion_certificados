@@ -6,7 +6,7 @@ import { Roles } from '../auth/roles.decorator';
 
 @Controller('certificates')
 export class CertificatesController {
-  constructor(private certificatesService: CertificatesService) {}
+  constructor(private certificatesService: CertificatesService) { }
 
   @Get('verify/:code')
   verifyByCode(@Param('code') code: string) {
@@ -59,5 +59,12 @@ export class CertificatesController {
   @Delete(':id/permanent')
   remove(@Param('id') id: string) {
     return this.certificatesService.remove(id);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('SUPER_ADMIN', 'STAFF')
+  @Post('many')
+  createMany(@Body() body: any, @Request() req: any) {
+    return this.certificatesService.createMany({ ...body, issuedById: req.user.id });
   }
 }

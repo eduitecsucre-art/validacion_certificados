@@ -192,8 +192,25 @@
               </button>
             </div>
           </div>
+
           <p v-if="massError" class="text-red-500 text-xs">{{ massError }}</p>
-          <p v-if="massSuccess" class="text-green-600 text-xs">{{ massSuccess }}</p>
+          <p v-if="massSummary" class="text-xs font-medium" :class="massHasErrors ? 'text-yellow-700' : 'text-green-600'">
+            {{ massSummary }}
+          </p>
+
+          <!-- Detalle por estudiante -->
+          <div v-if="massResults.length > 0" class="border rounded p-2 max-h-40 overflow-y-auto space-y-1 text-xs">
+            <div v-for="r in massResults" :key="r.studentId" class="flex justify-between items-center gap-2">
+              <span class="truncate">{{ getMassStudentName(r.studentId) }}</span>
+              <span :class="r.status === 'ok' ? 'text-green-600' : 'text-red-600'" class="shrink-0">
+                {{ r.status === 'ok' ? '✅ ' + r.code : '❌ ' + r.message }}
+              </span>
+            </div>
+          </div>
+          <p v-if="massHasErrors" class="text-xs text-gray-400">
+            Los estudiantes con error quedaron seleccionados para que puedas reintentar.
+          </p>
+
           <div class="flex gap-2 pt-2">
             <button type="submit" :disabled="massLoading || massForm.studentIds.length === 0"
               class="flex-1 bg-green-600 text-white py-2 rounded text-sm hover:bg-green-700 disabled:opacity-50">
@@ -201,7 +218,7 @@
             </button>
             <button type="button" @click="showMassModal = false"
               class="flex-1 border py-2 rounded text-sm hover:bg-gray-50">
-              Cancelar
+              Cerrar
             </button>
           </div>
         </form>
@@ -269,7 +286,14 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import QRCode from 'qrcode'
-import { getCertificates, createCertificate, revokeCertificate, reactivateCertificate, deleteCertificatePermanent } from '../../api/certificates'
+import {
+  getCertificates,
+  createCertificate,
+  createCertificatesMany,
+  revokeCertificate,
+  reactivateCertificate,
+  deleteCertificatePermanent,
+} from '../../api/certificates'
 import { getUsers } from '../../api/users'
 import { getCourses } from '../../api/courses'
 import { getEnrollmentsByCourse } from '../../api/enrollments'
@@ -285,7 +309,8 @@ const selectedCert = ref<any>(null)
 const qrDataUrl = ref('')
 const formError = ref('')
 const massError = ref('')
-const massSuccess = ref('')
+const massSummary = ref('')
+const massResults = ref<any[]>([])
 const massLoading = ref(false)
 const search = ref('')
 const filterStatus = ref('')
@@ -294,6 +319,8 @@ const form = ref({ studentId: '', courseId: '', instructor: '', startDate: '', e
 const massForm = ref({ courseId: '', instructor: '', startDate: '', endDate: '', hours: 0, studentIds: [] as string[] })
 
 const activeCourses = computed(() => courses.value.filter(c => c.active))
+
+const massHasErrors = computed(() => massResults.value.some(r => r.status === 'error'))
 
 const filtered = computed(() => {
   return certificates.value.filter(c => {
@@ -305,7 +332,13 @@ const filtered = computed(() => {
 })
 
 function getStudentName(id: string) {
-  return allUsers.value.find(u => u.id === id)?.name ?? id
+  const u = allUsers.value.find(u => u.id === id)
+  if (!u) return id
+  return `${u.apellidoPaterno} ${u.apellidoMaterno ?? ''} ${u.nombres}`.replace(/\s+/g, ' ').trim()
+}
+
+function getMassStudentName(id: string) {
+  return enrolledStudentsMass.value.find(u => u.studentId === id)?.studentName ?? id
 }
 
 function getCourseName(id: string) {
@@ -358,7 +391,8 @@ function openMassModal() {
   massForm.value = { courseId: '', instructor: '', startDate: '', endDate: '', hours: 0, studentIds: [] }
   enrolledStudentsMass.value = []
   massError.value = ''
-  massSuccess.value = ''
+  massSummary.value = ''
+  massResults.value = []
   showMassModal.value = true
 }
 
@@ -387,25 +421,38 @@ async function handleCreate() {
 
 async function handleMassCreate() {
   massError.value = ''
-  massSuccess.value = ''
+  massSummary.value = ''
+  massResults.value = []
+
   if (massForm.value.studentIds.length === 0) {
     massError.value = 'Selecciona al menos un estudiante'
     return
   }
+
   massLoading.value = true
   try {
-    for (const studentId of massForm.value.studentIds) {
-      await createCertificate({
-        studentId,
-        courseId: massForm.value.courseId,
-        instructor: massForm.value.instructor,
-        startDate: massForm.value.startDate,
-        endDate: massForm.value.endDate,
-        hours: massForm.value.hours,
-      })
-    }
-    massSuccess.value = `✅ ${massForm.value.studentIds.length} certificados emitidos correctamente`
-    massForm.value.studentIds = []
+    const res = await createCertificatesMany({
+      studentIds: massForm.value.studentIds,
+      courseId: massForm.value.courseId,
+      instructor: massForm.value.instructor,
+      startDate: massForm.value.startDate,
+      endDate: massForm.value.endDate,
+      hours: massForm.value.hours,
+    })
+
+    massResults.value = res.data
+    const okCount = massResults.value.filter((r: any) => r.status === 'ok').length
+    const errCount = massResults.value.length - okCount
+
+    massSummary.value = errCount === 0
+      ? `✅ ${okCount} certificado(s) emitido(s) correctamente`
+      : `${okCount} emitido(s), ${errCount} con error`
+
+    // Dejamos preseleccionados solo a los que fallaron, para reintentar fácil
+    massForm.value.studentIds = massResults.value
+      .filter((r: any) => r.status === 'error')
+      .map((r: any) => r.studentId)
+
     await load()
   } catch (e: any) {
     massError.value = e.response?.data?.message ?? 'Error al emitir certificados'
