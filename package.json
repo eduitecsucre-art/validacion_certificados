@@ -7,5 +7,8 @@
     "dev:backend": "pnpm --filter backend start:dev",
     "dev:frontend": "pnpm --filter frontend dev",
     "dev": "pnpm -r --parallel dev"
+  },
+  "dependencies": {
+    "uuid": "^14.0.1"
   }
 }

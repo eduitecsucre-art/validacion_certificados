@@ -18,7 +18,7 @@ interface UploadedFileData {
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('templates')
 export class TemplatesController {
-  constructor(private templatesService: TemplatesService) {}
+  constructor(private templatesService: TemplatesService) { }
 
   @Roles('SUPER_ADMIN', 'STAFF')
   @Get('course/:courseId')
@@ -26,14 +26,14 @@ export class TemplatesController {
     return this.templatesService.findByCourse(courseId);
   }
 
-  @Roles('SUPER_ADMIN')
+  @Roles('SUPER_ADMIN', 'STAFF')
   @Post('course/:courseId/upload')
   @UseInterceptors(FileInterceptor('file'))
   upload(@Param('courseId') courseId: string, @UploadedFile() file: UploadedFileData) {
     return this.templatesService.upload(courseId, file);
   }
 
-  @Roles('SUPER_ADMIN')
+  @Roles('SUPER_ADMIN', 'STAFF')
   @Put(':id/fields')
   updateFields(@Param('id') id: string, @Body() body: { fields: any[] }) {
     return this.templatesService.updateFields(id, body.fields);

@@ -47,6 +47,12 @@ const router = createRouter({
           meta: { roles: ['SUPER_ADMIN'] },
         },
         {
+          path: 'cursos/:courseId/plantilla',
+          name: 'plantilla-curso',
+          component: () => import('../views/admin/TemplateEditorView.vue'),
+          meta: { roles: ['SUPER_ADMIN'] },
+        },
+        {
           path: 'certificados',
           name: 'certificados',
           component: () => import('../views/staff/CertificatesView.vue'),

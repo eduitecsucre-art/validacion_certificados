@@ -1,3 +1,4 @@
+//import type { File as MulterFile } from 'multer';
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { DrizzleService } from '../drizzle.service';
 import { templates } from '../db/schema';
@@ -5,7 +6,7 @@ import { eq } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
 
-interface UploadedFileData {
+interface UploadedFile {
   buffer: Buffer;
   originalname: string;
   mimetype: string;
@@ -17,7 +18,7 @@ export class TemplatesService {
   constructor(
     private drizzle: DrizzleService,
     private cloudinary: CloudinaryService,
-  ) {}
+  ) { }
 
   async findByCourse(courseId: string) {
     const result = await this.drizzle.db
@@ -39,7 +40,9 @@ export class TemplatesService {
     return { ...result[0], fields: JSON.parse(result[0].fields) };
   }
 
-  async upload(courseId: string, file: UploadedFileData) {
+  // Sube la imagen de fondo. Si el curso ya tenía una plantilla, la
+  // reemplaza (misma fila); si no, crea una nueva con fields vacío.
+  async upload(courseId: string, file: UploadedFile) {
     const imageUrl = await this.cloudinary.uploadBuffer(
       file.buffer,
       'certificados/plantillas',

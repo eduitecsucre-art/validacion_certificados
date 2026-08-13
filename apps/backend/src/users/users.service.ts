@@ -13,12 +13,19 @@ export class UsersService {
     return `${user.apellidoPaterno} ${user.apellidoMaterno ?? ''} ${user.nombres}`.trim();
   }
 
+  // Quita el hash de password antes de devolver el usuario al cliente.
+  // Nunca debe viajar en ninguna respuesta HTTP, aunque sea hasheado.
+  private sanitize(user: any) {
+    const { password, ...safe } = user;
+    return { ...safe, fullName: this.fullName(user) };
+  }
+
   async findAll() {
     const result = await this.drizzle.db
       .select()
       .from(users)
       .orderBy(asc(users.apellidoPaterno), asc(users.apellidoMaterno), asc(users.nombres));
-    return result.map(u => ({ ...u, fullName: this.fullName(u) }));
+    return result.map(u => this.sanitize(u));
   }
 
   async findOne(id: string) {
@@ -28,7 +35,7 @@ export class UsersService {
       .where(eq(users.id, id))
       .limit(1);
     if (!result[0]) throw new NotFoundException('Usuario no encontrado');
-    return { ...result[0], fullName: this.fullName(result[0]) };
+    return this.sanitize(result[0]);
   }
 
   async create(data: {

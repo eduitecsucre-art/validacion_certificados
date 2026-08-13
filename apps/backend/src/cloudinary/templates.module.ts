@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
-import { TemplatesService } from './templates.service';
 import { TemplatesController } from './templates.controller';
+import { TemplatesService } from './templates.service';
 import { DrizzleService } from '../drizzle.service';
 import { CloudinaryModule } from '../cloudinary/cloudinary.module';
 
@@ -8,6 +8,5 @@ import { CloudinaryModule } from '../cloudinary/cloudinary.module';
   imports: [CloudinaryModule],
   controllers: [TemplatesController],
   providers: [TemplatesService, DrizzleService],
-  exports: [TemplatesService],
 })
 export class TemplatesModule {}

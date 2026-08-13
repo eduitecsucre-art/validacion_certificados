@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { DrizzleService } from '../drizzle.service';
 import { certificates, users, courses, enrollments } from '../db/schema';
 import { eq, and, lt } from 'drizzle-orm';
@@ -26,9 +26,7 @@ export class CertificatesService {
 
   /**
    * Marca como EXPIRED cualquier certificado que siga como VALID
-   * pero cuya fecha de vencimiento ya pasó. Se ejecuta antes de
-   * cualquier listado para que el status mostrado sea siempre correcto,
-   * sin depender de que alguien lo verifique por código individualmente.
+   * pero cuya fecha de vencimiento ya pasó.
    */
   private async expireOverdue() {
     const now = new Date().toISOString();
@@ -104,116 +102,133 @@ export class CertificatesService {
   }
 
   async create(data: {
-  studentId: string;
-  courseId: string;
-  issuedById: string;
-  instructor: string;
-  startDate: string;
-  endDate?: string;
-  hours: number;
-}) {
-  const id = uuidv4();
-  const code = this.generateCode();
+    studentId: string;
+    courseId: string;
+    issuedById: string;
+    instructor: string;
+    startDate: string;
+    endDate?: string;
+    hours: number;
+  }) {
+    // Bloquear solo si ya tiene un certificado VIGENTE del mismo curso.
+    // Si el anterior expiró o fue revocado, sí se permite emitir uno nuevo
+    // (ej: el curso se dicta cada año y el estudiante lo vuelve a tomar).
+    const existingValid = await this.drizzle.db
+      .select()
+      .from(certificates)
+      .where(and(
+        eq(certificates.studentId, data.studentId),
+        eq(certificates.courseId, data.courseId),
+        eq(certificates.status, 'VALID'),
+      ))
+      .limit(1);
 
-  const courseResult = await this.drizzle.db
-    .select()
-    .from(courses)
-    .where(eq(courses.id, data.courseId))
-    .limit(1);
-
-  const course = courseResult[0];
-  if (!course) throw new NotFoundException('Curso no encontrado');
-
-  const expiresAt = new Date(data.startDate);
-  expiresAt.setDate(expiresAt.getDate() + course.validityDays);
-
-  const baseUrl = process.env.FRONTEND_URL ?? 'http://localhost:5173';
-  const qrUrl = `${baseUrl}/verificar/${code}`;
-  const qrCode = await QRCode.toDataURL(qrUrl);
-
-  await this.drizzle.db.insert(certificates).values({
-    id,
-    code,
-    studentId: data.studentId,
-    courseId: data.courseId,
-    issuedById: data.issuedById,
-    instructor: data.instructor,
-    startDate: data.startDate,
-    endDate: data.endDate,
-    hours: data.hours,
-    expiresAt: expiresAt.toISOString(),
-    status: 'VALID',
-  });
-
-  // Marcar certificado como emitido en enrollment
-  await this.drizzle.db
-    .update(enrollments)
-    .set({ certificateIssued: true })
-    .where(and(
-      eq(enrollments.studentId, data.studentId),
-      eq(enrollments.courseId, data.courseId)
-    ));
-
-  const studentResult = await this.drizzle.db
-    .select()
-    .from(users)
-    .where(eq(users.id, data.studentId))
-    .limit(1);
-
-  const student = studentResult[0];
-
-  if (student?.email && process.env.RESEND_API_KEY !== 're_placeholder') {
-    try {
-      await this.resend.emails.send({
-        from: process.env.EMAIL_FROM ?? 'certificados@tuinstitucion.com',
-        to: student.email,
-        subject: `Tu certificado de ${course.name} ha sido emitido`,
-        html: `
-          <h2>¡Felicitaciones ${this.fullName(student)}!</h2>
-          <p>Tu certificado del curso <strong>${course.name}</strong> ha sido emitido exitosamente.</p>
-          <p><strong>Código:</strong> ${code}</p>
-          <p><strong>Instructor:</strong> ${data.instructor}</p>
-          <p><strong>Horas académicas:</strong> ${data.hours}h</p>
-          <p><strong>Válido hasta:</strong> ${expiresAt.toLocaleDateString('es-ES')}</p>
-          <p>Puedes verificar tu certificado en: <a href="${qrUrl}">${qrUrl}</a></p>
-        `,
-      });
-    } catch (e) {
-      console.error('Error enviando email de confirmación:', e);
+    if (existingValid[0]) {
+      throw new ConflictException('Este estudiante ya tiene un certificado vigente para este curso');
     }
+
+    const id = uuidv4();
+    const code = this.generateCode();
+
+    const courseResult = await this.drizzle.db
+      .select()
+      .from(courses)
+      .where(eq(courses.id, data.courseId))
+      .limit(1);
+
+    const course = courseResult[0];
+    if (!course) throw new NotFoundException('Curso no encontrado');
+
+    const expiresAt = new Date(data.startDate);
+    expiresAt.setDate(expiresAt.getDate() + course.validityDays);
+
+    const baseUrl = process.env.FRONTEND_URL ?? 'http://localhost:5173';
+    const qrUrl = `${baseUrl}/verificar/${code}`;
+    const qrCode = await QRCode.toDataURL(qrUrl);
+
+    await this.drizzle.db.insert(certificates).values({
+      id,
+      code,
+      studentId: data.studentId,
+      courseId: data.courseId,
+      issuedById: data.issuedById,
+      instructor: data.instructor,
+      startDate: data.startDate,
+      endDate: data.endDate,
+      hours: data.hours,
+      expiresAt: expiresAt.toISOString(),
+      status: 'VALID',
+    });
+
+    // Marcar certificado como emitido en enrollment
+    await this.drizzle.db
+      .update(enrollments)
+      .set({ certificateIssued: true })
+      .where(and(
+        eq(enrollments.studentId, data.studentId),
+        eq(enrollments.courseId, data.courseId)
+      ));
+
+    const studentResult = await this.drizzle.db
+      .select()
+      .from(users)
+      .where(eq(users.id, data.studentId))
+      .limit(1);
+
+    const student = studentResult[0];
+
+    if (student?.email && process.env.RESEND_API_KEY !== 're_placeholder') {
+      try {
+        await this.resend.emails.send({
+          from: process.env.EMAIL_FROM ?? 'certificados@tuinstitucion.com',
+          to: student.email,
+          subject: `Tu certificado de ${course.name} ha sido emitido`,
+          html: `
+            <h2>¡Felicitaciones ${this.fullName(student)}!</h2>
+            <p>Tu certificado del curso <strong>${course.name}</strong> ha sido emitido exitosamente.</p>
+            <p><strong>Código:</strong> ${code}</p>
+            <p><strong>Instructor:</strong> ${data.instructor}</p>
+            <p><strong>Horas académicas:</strong> ${data.hours}h</p>
+            <p><strong>Válido hasta:</strong> ${expiresAt.toLocaleDateString('es-ES')}</p>
+            <p>Puedes verificar tu certificado en: <a href="${qrUrl}">${qrUrl}</a></p>
+          `,
+        });
+      } catch (e) {
+        console.error('Error enviando email de confirmación:', e);
+      }
+    }
+
+    return { ...await this.findOne(id), qrCode };
   }
 
-  return { ...await this.findOne(id), qrCode };
-}
-
-async createMany(data: {
-  studentIds: string[];
-  courseId: string;
-  issuedById: string;
-  instructor: string;
-  startDate: string;
-  endDate?: string;
-  hours: number;
-}) {
-  const results: any[] = [];
-  for (const studentId of data.studentIds) {
-    try {
-      const cert = await this.create({
-        studentId,
-        courseId: data.courseId,
-        issuedById: data.issuedById,
-        instructor: data.instructor,
-        startDate: data.startDate,
-        endDate: data.endDate,
-        hours: data.hours,
-      });
-      results.push({ studentId, status: 'ok', certificateId: cert.id, code: cert.code });
-    } catch (e: any) {
-      results.push({ studentId, status: 'error', message: e.message ?? 'Error desconocido' });
+  async createMany(data: {
+    studentIds: string[];
+    courseId: string;
+    issuedById: string;
+    instructor: string;
+    startDate: string;
+    endDate?: string;
+    hours: number;
+  }) {
+    const results: any[] = [];
+    for (const studentId of data.studentIds) {
+      try {
+        const cert = await this.create({
+          studentId,
+          courseId: data.courseId,
+          issuedById: data.issuedById,
+          instructor: data.instructor,
+          startDate: data.startDate,
+          endDate: data.endDate,
+          hours: data.hours,
+        });
+        results.push({ studentId, status: 'ok', certificateId: cert.id, code: cert.code });
+      } catch (e: any) {
+        results.push({ studentId, status: 'error', message: e.message ?? 'Error desconocido' });
+      }
     }
+    return results;
   }
-  return results;
-}
 
   async revoke(id: string) {
     await this.findOne(id);

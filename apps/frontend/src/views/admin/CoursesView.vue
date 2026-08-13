@@ -38,6 +38,9 @@
             <td class="px-4 py-3 flex gap-2">
               <button @click="openEdit(course)" class="text-blue-500 hover:underline text-xs">Editar</button>
               <button @click="openEnrollments(course)" class="text-green-500 hover:underline text-xs">Inscripciones</button>
+              <router-link :to="`/cursos/${course.id}/plantilla`" class="text-purple-500 hover:underline text-xs">
+                Plantilla
+              </router-link>
               <button v-if="course.active" @click="handleDeactivate(course.id)"
                 class="text-red-500 hover:underline text-xs">Desactivar</button>
             </td>
