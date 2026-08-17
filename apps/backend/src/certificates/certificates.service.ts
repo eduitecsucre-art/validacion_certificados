@@ -1,16 +1,24 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, ForbiddenException } from '@nestjs/common';
 import { DrizzleService } from '../drizzle.service';
 import { certificates, users, courses, enrollments } from '../db/schema';
 import { eq, and, lt } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import * as QRCode from 'qrcode';
 import { Resend } from 'resend';
+import { TemplatesService } from '../templates/templates.service';
+import { CloudinaryService } from '../cloudinary/cloudinary.service';
+import { PdfGeneratorService } from './pdf-generator.service';
 
 @Injectable()
 export class CertificatesService {
   private resend: Resend;
 
-  constructor(private drizzle: DrizzleService) {
+  constructor(
+    private drizzle: DrizzleService,
+    private templatesService: TemplatesService,
+    private cloudinary: CloudinaryService,
+    private pdfGenerator: PdfGeneratorService,
+  ) {
     this.resend = new Resend(process.env.RESEND_API_KEY);
   }
 
@@ -24,10 +32,6 @@ export class CertificatesService {
     return `${user.apellidoPaterno} ${user.apellidoMaterno ?? ''} ${user.nombres}`.trim();
   }
 
-  /**
-   * Marca como EXPIRED cualquier certificado que siga como VALID
-   * pero cuya fecha de vencimiento ya pasó.
-   */
   private async expireOverdue() {
     const now = new Date().toISOString();
     await this.drizzle.db
@@ -101,6 +105,54 @@ export class CertificatesService {
     };
   }
 
+  // Genera el PDF a partir de la plantilla del curso y lo sube a Cloudinary.
+  // Si el curso no tiene plantilla configurada todavía, devuelve null en vez
+  // de fallar — el certificado se emite igual, solo que sin PDF por ahora.
+  private async generateAndUploadPdf(params: {
+    courseId: string;
+    studentName: string;
+    courseName: string;
+    instructor: string;
+    startDate: string;
+    endDate?: string;
+    hours: number;
+    code: string;
+    verifyUrl: string;
+  }): Promise<string | null> {
+    const template = await this.templatesService.findByCourse(params.courseId);
+    if (!template || !template.fields || template.fields.length === 0) {
+      return null;
+    }
+
+    try {
+      const imageRes = await fetch(template.imageUrl);
+      if (!imageRes.ok) return null;
+      const imageMime = imageRes.headers.get('content-type') ?? 'image/jpeg';
+      const imageBytes = Buffer.from(await imageRes.arrayBuffer());
+
+      const pdfBuffer = await this.pdfGenerator.generate(
+        imageBytes,
+        imageMime,
+        template.fields,
+        {
+          studentName: params.studentName,
+          courseName: params.courseName,
+          instructor: params.instructor,
+          startDate: params.startDate,
+          endDate: params.endDate,
+          hours: params.hours,
+          code: params.code,
+          verifyUrl: params.verifyUrl,
+        },
+      );
+
+      return await this.cloudinary.uploadBuffer(pdfBuffer, 'certificados/pdfs', 'raw');
+    } catch (e) {
+      console.error('Error generando PDF del certificado:', e);
+      return null;
+    }
+  }
+
   async create(data: {
     studentId: string;
     courseId: string;
@@ -110,9 +162,6 @@ export class CertificatesService {
     endDate?: string;
     hours: number;
   }) {
-    // Bloquear solo si ya tiene un certificado VIGENTE del mismo curso.
-    // Si el anterior expiró o fue revocado, sí se permite emitir uno nuevo
-    // (ej: el curso se dicta cada año y el estudiante lo vuelve a tomar).
     const existingValid = await this.drizzle.db
       .select()
       .from(certificates)
@@ -144,7 +193,28 @@ export class CertificatesService {
 
     const baseUrl = process.env.FRONTEND_URL ?? 'http://localhost:5173';
     const qrUrl = `${baseUrl}/verificar/${code}`;
-    const qrCode = await QRCode.toDataURL(qrUrl);
+
+    const studentResult = await this.drizzle.db
+      .select()
+      .from(users)
+      .where(eq(users.id, data.studentId))
+      .limit(1);
+
+    const student = studentResult[0];
+    if (!student) throw new NotFoundException('Estudiante no encontrado');
+
+    // Genera el PDF ANTES de insertar, así el registro ya nace con pdfUrl si aplica
+    const pdfUrl = await this.generateAndUploadPdf({
+      courseId: data.courseId,
+      studentName: this.fullName(student),
+      courseName: course.name,
+      instructor: data.instructor,
+      startDate: data.startDate,
+      endDate: data.endDate,
+      hours: data.hours,
+      code,
+      verifyUrl: qrUrl,
+    });
 
     await this.drizzle.db.insert(certificates).values({
       id,
@@ -158,9 +228,9 @@ export class CertificatesService {
       hours: data.hours,
       expiresAt: expiresAt.toISOString(),
       status: 'VALID',
+      pdfUrl: pdfUrl ?? undefined,
     });
 
-    // Marcar certificado como emitido en enrollment
     await this.drizzle.db
       .update(enrollments)
       .set({ certificateIssued: true })
@@ -169,16 +239,9 @@ export class CertificatesService {
         eq(enrollments.courseId, data.courseId)
       ));
 
-    const studentResult = await this.drizzle.db
-      .select()
-      .from(users)
-      .where(eq(users.id, data.studentId))
-      .limit(1);
-
-    const student = studentResult[0];
-
-    if (student?.email && process.env.RESEND_API_KEY !== 're_placeholder') {
+    if (student.email && process.env.RESEND_API_KEY !== 're_placeholder') {
       try {
+        const qrCode = await QRCode.toDataURL(qrUrl);
         await this.resend.emails.send({
           from: process.env.EMAIL_FROM ?? 'certificados@tuinstitucion.com',
           to: student.email,
@@ -198,7 +261,7 @@ export class CertificatesService {
       }
     }
 
-    return { ...await this.findOne(id), qrCode };
+    return this.findOne(id);
   }
 
   async createMany(data: {
@@ -250,9 +313,6 @@ export class CertificatesService {
 
   async remove(id: string) {
     const cert = await this.findOne(id);
-
-    // Si la inscripción original todavía existe, la desmarcamos
-    // como "certificado emitido" (no falla si ya no existe)
     await this.drizzle.db
       .update(enrollments)
       .set({ certificateIssued: false })
@@ -260,8 +320,108 @@ export class CertificatesService {
         eq(enrollments.studentId, cert.studentId),
         eq(enrollments.courseId, cert.courseId)
       ));
-
     await this.drizzle.db.delete(certificates).where(eq(certificates.id, id));
     return { message: 'Certificado eliminado permanentemente' };
   }
+
+  // Devuelve los bytes del PDF solo si quien pide tiene permiso (admin/staff,
+  // o el propio estudiante dueño del certificado) Y el certificado sigue VALID.
+  async getDownloadableFile(id: string, requester: { id: string; role: string }) {
+    const cert = await this.findOne(id);
+
+    const isStaffOrAdmin = requester.role === 'SUPER_ADMIN' || requester.role === 'STAFF';
+    const isOwner = requester.id === cert.studentId;
+    if (!isStaffOrAdmin && !isOwner) {
+      throw new ForbiddenException('No tienes permiso para descargar este certificado');
+    }
+
+    const now = new Date();
+    if (cert.status === 'VALID' && new Date(cert.expiresAt) < now) {
+      await this.drizzle.db
+        .update(certificates)
+        .set({ status: 'EXPIRED' })
+        .where(eq(certificates.id, id));
+      cert.status = 'EXPIRED';
+    }
+
+    if (cert.status !== 'VALID') {
+      throw new ConflictException(
+        `Este certificado no se puede descargar porque su estado es ${cert.status}`,
+      );
+    }
+
+    if (!cert.pdfUrl) {
+      throw new NotFoundException(
+        'Este certificado no tiene un PDF disponible (el curso no tenía plantilla configurada al momento de emitirlo)',
+      );
+    }
+
+    const response = await fetch(cert.pdfUrl);
+    if (!response.ok) {
+      throw new NotFoundException('No se pudo obtener el archivo del certificado');
+    }
+
+    const buffer = Buffer.from(await response.arrayBuffer());
+    return { buffer, filename: `${cert.code}.pdf` };
+  }
+
+  // Búsqueda pública por CI. No requiere login (así lo decidimos), por eso
+// no recibe "requester" ni valida dueño — cualquiera que sepa el CI puede
+// ver esta lista, igual que ya pasa con la verificación pública por código.
+async findByCI(ci: string) {
+  await this.expireOverdue();
+
+  const result = await this.drizzle.db
+    .select({
+      id: certificates.id,
+      code: certificates.code,
+      instructor: certificates.instructor,
+      startDate: certificates.startDate,
+      endDate: certificates.endDate,
+      hours: certificates.hours,
+      expiresAt: certificates.expiresAt,
+      status: certificates.status,
+      pdfUrl: certificates.pdfUrl,
+      courseName: courses.name,
+    })
+    .from(certificates)
+    .leftJoin(users, eq(certificates.studentId, users.id))
+    .leftJoin(courses, eq(certificates.courseId, courses.id))
+    .where(eq(users.ci, ci));
+
+  return result.map(r => ({ ...r, pdfUrl: undefined, hasPdf: !!r.pdfUrl && r.status === 'VALID' }));
+}
+
+// Descarga pública: mismo control de estado que getDownloadableFile,
+// pero sin verificar dueño (no hay sesión en este flujo).
+async getPublicDownloadableFile(id: string) {
+  const cert = await this.findOne(id);
+
+  const now = new Date();
+  if (cert.status === 'VALID' && new Date(cert.expiresAt) < now) {
+    await this.drizzle.db
+      .update(certificates)
+      .set({ status: 'EXPIRED' })
+      .where(eq(certificates.id, id));
+    cert.status = 'EXPIRED';
+  }
+
+  if (cert.status !== 'VALID') {
+    throw new ConflictException(
+      `Este certificado no se puede descargar porque su estado es ${cert.status}`,
+    );
+  }
+
+  if (!cert.pdfUrl) {
+    throw new NotFoundException('Este certificado no tiene un PDF disponible');
+  }
+
+  const response = await fetch(cert.pdfUrl);
+  if (!response.ok) {
+    throw new NotFoundException('No se pudo obtener el archivo del certificado');
+  }
+
+  const buffer = Buffer.from(await response.arrayBuffer());
+  return { buffer, filename: `${cert.code}.pdf` };
+}
 }

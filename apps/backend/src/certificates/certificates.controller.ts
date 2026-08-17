@@ -1,4 +1,5 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards, Request, Res } from '@nestjs/common';
+import type { Response } from 'express';
 import { CertificatesService } from './certificates.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
@@ -33,11 +34,29 @@ export class CertificatesController {
     return this.certificatesService.findOne(id);
   }
 
+  @UseGuards(JwtAuthGuard)
+  @Get(':id/download')
+  async download(@Param('id') id: string, @Request() req: any, @Res() res: Response) {
+    const { buffer, filename } = await this.certificatesService.getDownloadableFile(id, req.user);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+    });
+    res.send(buffer);
+  }
+
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('SUPER_ADMIN', 'STAFF')
   @Post()
   create(@Body() body: any, @Request() req: any) {
     return this.certificatesService.create({ ...body, issuedById: req.user.id });
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('SUPER_ADMIN', 'STAFF')
+  @Post('many')
+  createMany(@Body() body: any, @Request() req: any) {
+    return this.certificatesService.createMany({ ...body, issuedById: req.user.id });
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -61,10 +80,19 @@ export class CertificatesController {
     return this.certificatesService.remove(id);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('SUPER_ADMIN', 'STAFF')
-  @Post('many')
-  createMany(@Body() body: any, @Request() req: any) {
-    return this.certificatesService.createMany({ ...body, issuedById: req.user.id });
+  @Get('public/ci/:ci')
+  findByCI(@Param('ci') ci: string) {
+    return this.certificatesService.findByCI(ci);
   }
+
+  @Get('public/:id/download')
+  async downloadPublic(@Param('id') id: string, @Res() res: Response) {
+    const { buffer, filename } = await this.certificatesService.getPublicDownloadableFile(id);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+    });
+    res.send(buffer);
+  }
+
 }

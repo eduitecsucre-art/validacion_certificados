@@ -2,6 +2,8 @@
   <div class="min-h-screen bg-gray-100 flex items-center justify-center p-4">
     <div class="bg-white rounded-lg shadow-lg w-full max-w-lg p-8">
 
+      <img src="/ITEC_LOGO.png" alt="Logo ITEC" class="h-16 mx-auto mb-6 object-contain" />
+
       <div v-if="loading" class="text-center text-gray-500">
         Verificando certificado...
       </div>

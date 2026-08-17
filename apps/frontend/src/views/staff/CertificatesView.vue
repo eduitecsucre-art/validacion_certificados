@@ -6,7 +6,8 @@
         <button @click="openMassModal" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 text-sm">
           + Emisión Masiva
         </button>
-        <button @click="openIndividualModal" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 text-sm">
+        <button @click="openIndividualModal"
+          class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 text-sm">
           + Emitir Individual
         </button>
       </div>
@@ -47,12 +48,11 @@
             <td class="px-4 py-3">{{ formatDate(cert.startDate) }}</td>
             <td class="px-4 py-3">{{ formatDate(cert.expiresAt) }}</td>
             <td class="px-4 py-3">
-              <span class="px-2 py-0.5 rounded text-xs font-medium"
-                :class="{
-                  'bg-green-100 text-green-700': cert.status === 'VALID',
-                  'bg-yellow-100 text-yellow-700': cert.status === 'EXPIRED',
-                  'bg-red-100 text-red-700': cert.status === 'REVOKED',
-                }">
+              <span class="px-2 py-0.5 rounded text-xs font-medium" :class="{
+                'bg-green-100 text-green-700': cert.status === 'VALID',
+                'bg-yellow-100 text-yellow-700': cert.status === 'EXPIRED',
+                'bg-red-100 text-red-700': cert.status === 'REVOKED',
+              }">
                 {{ cert.status }}
               </span>
             </td>
@@ -61,13 +61,15 @@
                 <button @click="openDetail(cert)" class="text-blue-500 hover:underline text-xs">
                   Ver
                 </button>
-
+                <button v-if="cert.status === 'VALID' && cert.pdfUrl" @click="handleDownload(cert)"
+                  class="text-indigo-600 hover:underline text-xs">
+                  Descargar
+                </button>
                 <button v-if="cert.status !== 'REVOKED'" @click="handleRevoke(cert)"
                   class="text-yellow-600 hover:underline text-xs">
                   Revocar
                 </button>
-                <button v-else @click="handleReactivate(cert)"
-                  class="text-green-600 hover:underline text-xs">
+                <button v-else @click="handleReactivate(cert)" class="text-green-600 hover:underline text-xs">
                   Reactivar
                 </button>
 
@@ -106,8 +108,8 @@
                 {{ u.studentName }}
               </option>
             </select>
-            <p v-if="form.courseId && enrolledStudentsIndividual.length === 0"
-              class="text-xs text-yellow-600 mt-1">No hay estudiantes inscritos en este curso</p>
+            <p v-if="form.courseId && enrolledStudentsIndividual.length === 0" class="text-xs text-yellow-600 mt-1">No
+              hay estudiantes inscritos en este curso</p>
           </div>
           <div>
             <label class="text-xs text-gray-500">Instructor</label>
@@ -133,7 +135,8 @@
             <button type="submit" class="flex-1 bg-blue-600 text-white py-2 rounded text-sm hover:bg-blue-700">
               Emitir
             </button>
-            <button type="button" @click="showModal = false" class="flex-1 border py-2 rounded text-sm hover:bg-gray-50">
+            <button type="button" @click="showModal = false"
+              class="flex-1 border py-2 rounded text-sm hover:bg-gray-50">
               Cancelar
             </button>
           </div>
@@ -161,7 +164,8 @@
           <div class="flex gap-2">
             <div class="flex-1">
               <label class="text-xs text-gray-500">Fecha inicio</label>
-              <input v-model="massForm.startDate" type="date" required class="w-full border rounded px-3 py-2 text-sm" />
+              <input v-model="massForm.startDate" type="date" required
+                class="w-full border rounded px-3 py-2 text-sm" />
             </div>
             <div class="flex-1">
               <label class="text-xs text-gray-500">Fecha fin (opcional)</label>
@@ -194,7 +198,8 @@
           </div>
 
           <p v-if="massError" class="text-red-500 text-xs">{{ massError }}</p>
-          <p v-if="massSummary" class="text-xs font-medium" :class="massHasErrors ? 'text-yellow-700' : 'text-green-600'">
+          <p v-if="massSummary" class="text-xs font-medium"
+            :class="massHasErrors ? 'text-yellow-700' : 'text-green-600'">
             {{ massSummary }}
           </p>
 
@@ -248,7 +253,8 @@
           </div>
           <div class="flex justify-between border-b pb-2">
             <span class="text-gray-500">Fecha</span>
-            <span>{{ formatDate(selectedCert.startDate) }}{{ selectedCert.endDate ? ' - ' + formatDate(selectedCert.endDate) : '' }}</span>
+            <span>{{ formatDate(selectedCert.startDate) }}{{ selectedCert.endDate ? ' - ' +
+              formatDate(selectedCert.endDate) : '' }}</span>
           </div>
           <div class="flex justify-between border-b pb-2">
             <span class="text-gray-500">Horas</span>
@@ -260,12 +266,11 @@
           </div>
           <div class="flex justify-between">
             <span class="text-gray-500">Estado</span>
-            <span class="px-2 py-0.5 rounded text-xs font-medium"
-              :class="{
-                'bg-green-100 text-green-700': selectedCert.status === 'VALID',
-                'bg-yellow-100 text-yellow-700': selectedCert.status === 'EXPIRED',
-                'bg-red-100 text-red-700': selectedCert.status === 'REVOKED',
-              }">
+            <span class="px-2 py-0.5 rounded text-xs font-medium" :class="{
+              'bg-green-100 text-green-700': selectedCert.status === 'VALID',
+              'bg-yellow-100 text-yellow-700': selectedCert.status === 'EXPIRED',
+              'bg-red-100 text-red-700': selectedCert.status === 'REVOKED',
+            }">
               {{ selectedCert.status }}
             </span>
           </div>
@@ -293,6 +298,7 @@ import {
   revokeCertificate,
   reactivateCertificate,
   deleteCertificatePermanent,
+  downloadCertificate,
 } from '../../api/certificates'
 import { getUsers } from '../../api/users'
 import { getCourses } from '../../api/courses'
@@ -330,6 +336,40 @@ const filtered = computed(() => {
     return matchSearch && matchStatus
   })
 })
+
+const downloadError = ref('')
+
+async function handleDownload(cert: any) {
+  downloadError.value = ''
+  try {
+    const res = await downloadCertificate(cert.id)
+    const blob = new Blob([res.data], { type: 'application/pdf' })
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `${cert.code}.pdf`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+  } catch (e: any) {
+    // Como pedimos el blob como blob, si el backend devuelve un error JSON
+    // (ej: "certificado EXPIRED"), llega como Blob también — hay que leerlo
+    // como texto y parsearlo para mostrar el mensaje real, no [object Blob].
+    if (e.response?.data instanceof Blob) {
+      try {
+        const text = await e.response.data.text()
+        const parsed = JSON.parse(text)
+        downloadError.value = parsed.message ?? 'Error al descargar el certificado'
+      } catch {
+        downloadError.value = 'Error al descargar el certificado'
+      }
+    } else {
+      downloadError.value = e.response?.data?.message ?? 'Error al descargar el certificado'
+    }
+    alert(downloadError.value)
+  }
+}
 
 function getStudentName(id: string) {
   const u = allUsers.value.find(u => u.id === id)
