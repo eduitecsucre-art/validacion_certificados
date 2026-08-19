@@ -19,6 +19,67 @@ export class NotificationsService {
     return `${user.apellidoPaterno} ${user.apellidoMaterno ?? ''} ${user.nombres}`.trim();
   }
 
+  // Registra el intento de notificación en la BD. sentAt = null significa
+  // que se intentó pero falló (queda visible como "Pendiente" en el panel,
+  // ya que hoy no tenemos una columna de error dedicada en el schema).
+  private async recordNotification(certificateId: string, type: string, sent: boolean) {
+    await this.drizzle.db.insert(notifications).values({
+      id: uuidv4(),
+      certificateId,
+      type,
+      sentAt: sent ? new Date().toISOString() : null,
+    });
+  }
+
+  // Se llama desde CertificatesService justo al emitir un certificado nuevo.
+  async sendIssuanceEmail(cert: {
+    id: string;
+    studentEmail: string;
+    studentName: string;
+    courseName: string;
+    code: string;
+    instructor: string;
+    hours: number;
+    expiresAt: string;
+    verifyUrl: string;
+    downloadPageUrl
+  }) {
+    if (!cert.studentEmail || process.env.RESEND_API_KEY === 're_placeholder') {
+      return;
+    }
+
+    try {
+      await this.resend.emails.send({
+        from: process.env.EMAIL_FROM ?? 'certificados@tuinstitucion.com',
+        to: cert.studentEmail,
+        subject: `Tu certificado de ${cert.courseName} ha sido emitido`,
+        html: `
+  <h2>¡Felicitaciones ${cert.studentName}!</h2>
+  <p>Tu certificado del curso <strong>${cert.courseName}</strong> ha sido emitido exitosamente.</p>
+  <p><strong>Código:</strong> ${cert.code}</p>
+  <p><strong>Instructor:</strong> ${cert.instructor}</p>
+  <p><strong>Horas académicas:</strong> ${cert.hours}h</p>
+  <p><strong>Válido hasta:</strong> ${new Date(cert.expiresAt).toLocaleDateString('es-ES')}</p>
+  <p style="margin: 24px 0;">
+    <a href="${cert.downloadPageUrl}"
+       style="background-color: #4f46e5; color: #ffffff; padding: 10px 20px; border-radius: 6px; text-decoration: none; font-weight: bold;">
+      📄 Descargar mi certificado
+    </a>
+  </p>
+  <p style="font-size: 13px; color: #6b7280;">
+    Busca tu certificado ingresando tu número de CI. Si necesitas comprobar la validez de este certificado ante un tercero (por ejemplo, un empleador), puedes compartir este enlace de verificación: <a href="${cert.verifyUrl}">${cert.verifyUrl}</a>
+  </p>
+`,
+      });
+
+      await this.recordNotification(cert.id, 'CERTIFICATE_ISSUED', true);
+      this.logger.log(`Email de emisión enviado a ${cert.studentEmail}`);
+    } catch (error) {
+      await this.recordNotification(cert.id, 'CERTIFICATE_ISSUED', false);
+      this.logger.error(`Error enviando email de emisión: ${(error as Error).message}`);
+    }
+  }
+
   @Cron(CronExpression.EVERY_DAY_AT_8AM)
   async checkExpiringCertificates() {
     this.logger.log('Revisando certificados por vencer...');
@@ -87,15 +148,10 @@ export class NotificationsService {
         `,
       });
 
-      await this.drizzle.db.insert(notifications).values({
-        id: uuidv4(),
-        certificateId: cert.id,
-        type: 'EXPIRATION_WARNING',
-        sentAt: new Date().toISOString(),
-      });
-
+      await this.recordNotification(cert.id, 'EXPIRATION_WARNING', true);
       this.logger.log(`Email enviado a ${cert.studentEmail}`);
     } catch (error) {
+      await this.recordNotification(cert.id, 'EXPIRATION_WARNING', false);
       this.logger.error(`Error enviando email: ${(error as Error).message}`);
     }
   }

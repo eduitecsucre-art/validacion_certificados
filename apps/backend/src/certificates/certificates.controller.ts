@@ -21,6 +21,13 @@ export class CertificatesController {
     return this.certificatesService.findAll();
   }
 
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('SUPER_ADMIN', 'STAFF')
+  @Post(':id/resend-email')
+  resendEmail(@Param('id') id: string) {
+    return this.certificatesService.resendIssuanceEmail(id);
+  }
+
   @UseGuards(JwtAuthGuard)
   @Get('my')
   findMy(@Request() req: any) {

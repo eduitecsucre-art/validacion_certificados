@@ -15,3 +15,5 @@ export const searchCertificatesByCI = (ci: string) => api.get(`/certificates/pub
 
 export const downloadPublicCertificate = (id: string) =>
   api.get(`/certificates/public/${id}/download`, { responseType: 'blob' })
+
+export const resendCertificateEmail = (id: string) => api.post(`/certificates/${id}/resend-email`)
