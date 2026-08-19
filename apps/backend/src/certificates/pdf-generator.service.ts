@@ -14,6 +14,8 @@ interface TemplateField {
   bold?: boolean;
   italic?: boolean;
   size?: number;
+  text?: string;
+  hoursSuffix?: string;
 }
 
 interface CertificateData {
@@ -26,6 +28,18 @@ interface CertificateData {
   code: string;
   verifyUrl: string;
 }
+
+const MONTH_NAMES = [
+  'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+  'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
+];
+
+// Todos los tamaños de letra se guardan relativos a este ancho de referencia.
+// Un fontSize de 24 significa "24pt si la plantilla midiera 1000px de ancho";
+// para plantillas más grandes o chicas, se escala proporcionalmente. Esto es
+// lo que hace que el tamaño se vea IGUAL en el editor y en el PDF final,
+// sin importar la resolución real de la imagen subida.
+const REFERENCE_WIDTH = 1000;
 
 @Injectable()
 export class PdfGeneratorService {
@@ -62,8 +76,22 @@ export class PdfGeneratorService {
     return rgb(r, g, b);
   }
 
+  // Parsea "YYYY-MM-DD" manualmente, sin pasar por new Date(), para evitar
+  // que la conversión de zona horaria corra el día hacia atrás (bug clásico
+  // de JS: new Date("2026-06-30") puede dar 29 de junio según el huso horario
+  // del servidor).
+  private parseDateParts(dateStr: string) {
+    const [year, month, day] = dateStr.split('-').map(Number);
+    return { year, month, day }; // month es 1-12 aquí, no 0-11
+  }
+
+  private capitalize(text: string): string {
+    return text.charAt(0).toUpperCase() + text.slice(1);
+  }
+
   private formatDate(dateStr: string): string {
-    return new Date(dateStr).toLocaleDateString('es-ES');
+    const { day, month, year } = this.parseDateParts(dateStr);
+    return `${day}/${month}/${year}`;
   }
 
   private fieldText(field: TemplateField, data: CertificateData): string {
@@ -73,8 +101,16 @@ export class PdfGeneratorService {
       case 'instructor': return data.instructor;
       case 'startDate': return this.formatDate(data.startDate);
       case 'endDate': return data.endDate ? this.formatDate(data.endDate) : '';
-      case 'hours': return `${data.hours}h`;
+      case 'startDay': return this.parseDateParts(data.startDate).day.toString();
+      case 'endDay': return data.endDate ? this.parseDateParts(data.endDate).day.toString() : '';
+      case 'month': {
+        const { month } = this.parseDateParts(data.startDate);
+        return this.capitalize(MONTH_NAMES[month - 1]);
+      }
+      case 'year': return this.parseDateParts(data.startDate).year.toString();
+      case 'hours': return `${data.hours}${field.hoursSuffix ?? ' horas'}`;
       case 'code': return data.code;
+      case 'customText': return field.text ?? '';
       default: return '';
     }
   }
@@ -95,12 +131,10 @@ export class PdfGeneratorService {
     const page = pdfDoc.addPage([width, height]);
     page.drawImage(image, { x: 0, y: 0, width, height });
 
-    // Cache para no re-embeber la misma fuente por cada campo que la use
     const fontCache = new Map<string, PDFFont>();
+    const scale = width / REFERENCE_WIDTH;
 
     for (const field of fields) {
-      // El editor guarda posiciones en % con origen arriba-izquierda (como el navegador).
-      // El PDF usa origen abajo-izquierda, así que invertimos el eje Y.
       const xPos = (field.x / 100) * width;
       const yPos = height - (field.y / 100) * height;
 
@@ -118,14 +152,18 @@ export class PdfGeneratorService {
         continue;
       }
 
+      const text = this.fieldText(field, data);
+      if (!text) continue; // ej: endDay sin endDate, o customText vacío
+
       const cacheKey = `${field.fontFamily}-${field.bold}-${field.italic}`;
       if (!fontCache.has(cacheKey)) {
         fontCache.set(cacheKey, await this.resolveFont(pdfDoc, field));
       }
       const font = fontCache.get(cacheKey)!;
 
-      const text = this.fieldText(field, data);
-      const fontSize = field.fontSize ?? 24;
+      // Aquí está el fix: el tamaño configurado se escala según qué tan
+      // grande es la imagen real respecto al ancho de referencia (1000px).
+      const fontSize = ((field.fontSize ?? 24) * scale);
       const color = this.hexToRgb(field.color ?? '#1f2937');
       const textWidth = font.widthOfTextAtSize(text, fontSize);
 

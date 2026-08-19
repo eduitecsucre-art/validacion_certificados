@@ -67,6 +67,14 @@
         active-class="bg-gray-700">
         👤 Mi Perfil
       </RouterLink>
+
+      <div class="pt-4 mt-4 border-t border-gray-700">
+        <p class="px-3 text-xs text-gray-500 uppercase tracking-wide mb-1">Herramientas públicas</p>
+        <a href="/mis-certificados/buscar" target="_blank" rel="noopener"
+          class="flex items-center gap-2 px-3 py-2 rounded-md hover:bg-gray-700 text-sm text-gray-300">
+          🔍 Buscar certificado (público)
+        </a>
+      </div>
     </nav>
 
     <div class="p-4 border-t border-gray-700">
