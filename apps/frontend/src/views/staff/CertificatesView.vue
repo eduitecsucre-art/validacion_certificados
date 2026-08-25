@@ -397,12 +397,18 @@ async function loadEnrolledStudents(mode: 'individual' | 'mass') {
     enrolledStudentsIndividual.value = res.data
     form.value.studentId = ''
     const course = courses.value.find(c => c.id === courseId)
-    if (course) form.value.instructor = course.instructor
+    if (course) {
+      form.value.instructor = course.instructor
+      form.value.hours = course.hours
+    }
   } else {
     enrolledStudentsMass.value = res.data
     massForm.value.studentIds = []
     const course = courses.value.find(c => c.id === courseId)
-    if (course) massForm.value.instructor = course.instructor
+    if (course) {
+      massForm.value.instructor = course.instructor
+      massForm.value.hours = course.hours
+    }
   }
 }
 

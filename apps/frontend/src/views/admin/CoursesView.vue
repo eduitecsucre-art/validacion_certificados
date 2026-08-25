@@ -29,7 +29,7 @@
             <td class="px-4 py-3 font-medium">{{ course.name }}</td>
             <td class="px-4 py-3">{{ course.instructor }}</td>
             <td class="px-4 py-3">{{ course.hours }}h</td>
-            <td class="px-4 py-3">{{ course.validityDays }} días</td>
+            <td class="px-4 py-3">{{ formatValidity(course.validityDays) }}</td>
             <td class="px-4 py-3">
               <span :class="course.active ? 'text-green-600' : 'text-red-500'">
                 {{ course.active ? 'Activo' : 'Inactivo' }}
@@ -75,9 +75,18 @@
               class="w-full border rounded px-3 py-2 text-sm" />
           </div>
           <div>
-            <label class="text-xs text-gray-500">Vigencia en días (ej: 365 = 1 año)</label>
-            <input v-model.number="form.validityDays" type="number" min="1" required
-              class="w-full border rounded px-3 py-2 text-sm" />
+            <label class="text-xs text-gray-500">Vigencia del certificado</label>
+            <div class="flex gap-2">
+              <input v-model.number="validityAmount" type="number" min="0.1" step="0.1" required
+                class="flex-1 border rounded px-3 py-2 text-sm" />
+              <select v-model="validityUnit" class="border rounded px-3 py-2 text-sm">
+                <option value="years">Años</option>
+                <option value="days">Días</option>
+              </select>
+            </div>
+            <p class="text-xs text-gray-400 mt-1">
+              Equivale a {{ computedValidityDays }} día(s)
+            </p>
           </div>
           <p v-if="formError" class="text-red-500 text-xs">{{ formError }}</p>
           <div class="flex gap-2 pt-2">
@@ -168,7 +177,19 @@ const selectedCourse = ref<any>(null)
 const selectedStudents = ref<string[]>([])
 const formError = ref('')
 const search = ref('')
-const form = ref({ name: '', instructor: '', description: '', hours: 0, validityDays: 365 })
+const form = ref({ name: '', instructor: '', description: '', hours: 0 })
+
+// Unidad de vigencia editable en el formulario. Se convierte a días
+// (lo único que guarda la base de datos) justo antes de enviar.
+const validityAmount = ref(1)
+const validityUnit = ref<'years' | 'days'>('years')
+
+const computedValidityDays = computed(() => {
+  const amount = validityAmount.value || 0
+  return validityUnit.value === 'years'
+    ? Math.round(amount * 365)
+    : Math.round(amount)
+})
 
 const filtered = computed(() => {
   const q = search.value.toLowerCase()
@@ -180,6 +201,14 @@ const availableStudents = computed(() => {
   const enrolledIds = enrollments.value.map(e => e.studentId)
   return allStudents.value.filter(u => !enrolledIds.includes(u.id))
 })
+
+function formatValidity(days: number) {
+  if (days % 365 === 0) {
+    const years = days / 365
+    return `${years} año${years !== 1 ? 's' : ''}`
+  }
+  return `${days} días`
+}
 
 async function load() {
   const [coursesRes, usersRes] = await Promise.all([getCourses(), getUsers()])
@@ -211,7 +240,9 @@ async function handleUnenroll(id: string) {
 
 function openCreate() {
   editing.value = null
-  form.value = { name: '', instructor: '', description: '', hours: 0, validityDays: 365 }
+  form.value = { name: '', instructor: '', description: '', hours: 0 }
+  validityAmount.value = 1
+  validityUnit.value = 'years'
   showModal.value = true
 }
 
@@ -222,18 +253,23 @@ function openEdit(course: any) {
     instructor: course.instructor,
     description: course.description ?? '',
     hours: course.hours,
-    validityDays: course.validityDays,
   }
+  // Al editar, mostramos el valor tal cual está guardado, en días, para no
+  // perder precisión si el curso no tiene una vigencia "redonda" en años.
+  // El staff puede cambiar la unidad a "Años" si quiere reconfigurarlo.
+  validityAmount.value = course.validityDays
+  validityUnit.value = 'days'
   showModal.value = true
 }
 
 async function handleSave() {
   formError.value = ''
   try {
+    const payload = { ...form.value, validityDays: computedValidityDays.value }
     if (editing.value) {
-      await updateCourse(editing.value.id, form.value)
+      await updateCourse(editing.value.id, payload)
     } else {
-      await createCourse(form.value)
+      await createCourse(payload)
     }
     closeModal()
     await load()
