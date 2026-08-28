@@ -1,6 +1,7 @@
 import {
   Controller, Get, Post, Put, Delete,
   Body, Param, UseGuards, UseInterceptors, UploadedFile,
+  ParseFilePipeBuilder, HttpStatus,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { TemplatesService } from './templates.service';
@@ -29,7 +30,19 @@ export class TemplatesController {
   @Roles('SUPER_ADMIN')
   @Post('course/:courseId/upload')
   @UseInterceptors(FileInterceptor('file'))
-  upload(@Param('courseId') courseId: string, @UploadedFile() file: UploadedFileData) {
+  upload(
+    @Param('courseId') courseId: string,
+    @UploadedFile(
+      new ParseFilePipeBuilder()
+        .addFileTypeValidator({ fileType: /^image\/(jpeg|jpg|png)$/ })
+        .addMaxSizeValidator({ maxSize: 5 * 1024 * 1024 }) // 5MB
+        .build({
+          errorHttpStatusCode: HttpStatus.UNPROCESSABLE_ENTITY,
+          fileIsRequired: true,
+        }),
+    )
+    file: UploadedFileData,
+  ) {
     return this.templatesService.upload(courseId, file);
   }
 

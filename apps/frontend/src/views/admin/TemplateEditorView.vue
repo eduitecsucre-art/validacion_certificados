@@ -314,7 +314,8 @@ async function handleImageChange(e: Event) {
     measureContainer()
     watchContainer()
   } catch (e: any) {
-    error.value = e.response?.data?.message ?? 'Error al subir la imagen'
+    const msg = e.response?.data?.message
+    error.value = Array.isArray(msg) ? msg.join(', ') : (msg ?? 'Error al subir la imagen')
   }
 }
 
